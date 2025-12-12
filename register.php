@@ -31,6 +31,9 @@ $REGISTER_LTI2 = array(
             "review_towel" => "42",
         ),
     ),
+    "analytics" => array(
+        "launches"
+    ),
     "screen_shots" => array(
         
     )

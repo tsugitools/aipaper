@@ -19,6 +19,9 @@ if ( SettingsForm::handleSettingsPost() ) {
     return;
 }
 
+// Grab the due date information
+$dueDate = SettingsForm::getDueDate();
+
 $next = U::safe_href(U::get($_GET, 'next', 'edit.php'));
 $user_id = U::safe_href(U::get($_GET, 'user_id'));
 if ( $user_id && ! $LAUNCH->user->instructor ) {
@@ -69,15 +72,18 @@ $OUTPUT->bodyStart();
 $OUTPUT->topNav($menu);
 $OUTPUT->flashMessages();
 
-SettingsForm::start();
-// SettingsForm::checkbox('sendgrade',__('Send a grade'));
-?>
-<p>This tool uses technology from
-<a href="https://ckeditor.com/" target="_blank">CKEditor 5.0</a>.
-</p>
-<?php
-SettingsForm::done();
-SettingsForm::end();
+if ( $USER->instructor ) {
+    SettingsForm::start();
+    SettingsForm::dueDate();
+    SettingsForm::done();
+    SettingsForm::end();
+}
+
+$OUTPUT->welcomeUserCourse();
+
+if ( $dueDate->message ) {
+    echo('<p style="color:red;">'.$dueDate->message.'</p>'."\n");
+}
 
 $OUTPUT->helpModal("MiniPaper Tool",
     "You can edit and submit your paper using this tool. Your teacher can review your submission and provide feedback through comments.");
@@ -87,7 +93,6 @@ if ( U::strlen($inst_note) > 0 ) {
 }
 
 if ( U::strlen($old_content) < 1 ) {
-    $OUTPUT->welcomeUserCourse();
     echo("<p>Please edit your submission.</p>\n");
     $OUTPUT->footer();
     return;
