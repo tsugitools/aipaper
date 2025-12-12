@@ -58,8 +58,7 @@ $OUTPUT->flashMessages();
 SettingsForm::start();
 // SettingsForm::checkbox('sendgrade',__('Send a grade'));
 ?>
-    <p>This tool uses technology from the
-        <a href="http://annotatorjs.org/" target="_blank">Annotator JS</a> project and
+    <p>This tool uses technology from
         <a href="https://ckeditor.com/" target="_blank">CKEditor 5.0</a>.
     </p>
 <?php
@@ -108,7 +107,6 @@ $(document).ready( function () {
       var html = HtmlSanitizer.SanitizeHtml(data);
       console.log(html);
       $('#editor').html(html);
-      $('#output_div').html(html);
       ClassicEditor
             .create( document.querySelector( '#editor' ) ,
                 {

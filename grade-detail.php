@@ -5,7 +5,6 @@ require_once "../config.php";
 use \Tsugi\Util\U;
 use \Tsugi\Util\LTI13;
 use \Tsugi\UI\Table;
-use \Tsugi\Core\Annotate;
 use \Tsugi\Core\Result;
 use \Tsugi\Core\LTIX;
 use \Tsugi\Grades\GradeUtil;
@@ -35,7 +34,6 @@ $self_url = addSession('grade.php?user_id='.$user_id);
 // Get the user's grade data also checks session
 $row = GradeUtil::gradeLoad($user_id);
 
-$annotations = Annotate::loadAnnotations($LAUNCH, $user_id);
 $content = $LAUNCH->result->getJsonKeyForUser('content', '', $user_id);
 
 // Load and parse the old JSON
@@ -94,12 +92,6 @@ if ( isset($_POST['instSubmit']) || isset($_POST['instSubmitAdvance']) ) {
     }
 
     $update_json = false;
-    if ( U::get($_POST, 'reset') == 'on' ) {
-        $json->annotations = array();
-        if ( U::strlen($success) > 0 ) $success .= ', ';
-        $success .= 'Annotations reset';
-        $update_json = true;
-    }
 
     $new_lock = U::get($_POST, 'lock') == 'on';
     if ( $new_lock != $old_lock ) {
@@ -136,12 +128,10 @@ $OUTPUT->flashMessages();
 // Show the basic info for this user
 GradeUtil::gradeShowInfo($row, false);
 
-echo("<p>Annotation count: ".count($annotations)."</p>\n");
-
 if ( U::strlen($content) > 0 ) {
     $next = Table::makeUrl('grade-detail.php', $getparms);
     echo('<p><a href="index.php?user_id='.$user_id.'&next='.urlencode($next).'">');
-    echo(__('View / Annotate Submission'));
+    echo(__('View Submission'));
     echo("</a><p>\n");
 }
 
@@ -163,10 +153,6 @@ echo('<label for="lock">Student Submission Locked:</label>
       <input type="checkbox" name="lock" id="lock"'.
       ($old_lock ? ' checked ' : '')
       .'/><br/>');
-
-echo('<label for="reset">Reset Annotations:</label>
-      <input type="checkbox" name="reset" id="reset"
-      onclick="return confirm(\'Are you sure you want to reset the annotations?\');" /><br/>');
 
 echo('<label for="inst_note">Instructor Note To Student</label><br/>
       <textarea name="inst_note" id="inst_note" style="width:60%" rows="5">');

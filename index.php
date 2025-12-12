@@ -8,8 +8,6 @@ use \Tsugi\Util\U;
 use \Tsugi\Core\LTIX;
 use \Tsugi\Core\Settings;
 use \Tsugi\UI\SettingsForm;
-use \Tsugi\UI\Annotate;
-use \Tsugi\Core\Annotate as AnnotateModel;
 
 // No parameter means we require CONTEXT, USER, and LINK
 $LAUNCH = LTIX::requireData();
@@ -30,7 +28,6 @@ if ( $user_id && ! $LAUNCH->user->instructor ) {
 if ( ! $user_id ) $user_id = $LAUNCH->user->id;
 
 $inst_note = $LAUNCH->result->getNote($user_id );
-$annotations = AnnotateModel::loadAnnotations($LAUNCH, $user_id);
 
 // Load and parse the old JSON
 $json = $LAUNCH->result->getJsonForUser($user_id);
@@ -47,9 +44,6 @@ if ( $lock && ! $LAUNCH->user->instructor ) {
     $menu->addLeft(__('Entry Locked'), false);
 } else {
    $menu->addLeft($edit_text, $next);
-}
-if ( count($annotations) > 0 ) {
-    $menu->addRight(__('Annotations:').' '.count($annotations), false);
 }
 
 if ( $LAUNCH->user->instructor ) {
@@ -71,7 +65,6 @@ $old_content = $LAUNCH->result->getJsonKeyForUser('content', '', $user_id);
 
 // Render view
 $OUTPUT->header();
-echo(Annotate::header());
 $OUTPUT->bodyStart();
 $OUTPUT->topNav($menu);
 $OUTPUT->flashMessages();
@@ -79,17 +72,15 @@ $OUTPUT->flashMessages();
 SettingsForm::start();
 // SettingsForm::checkbox('sendgrade',__('Send a grade'));
 ?>
-<p>This tool uses technology from the
-<a href="http://annotatorjs.org/" target="_blank">Annotator JS</a> project and
+<p>This tool uses technology from
 <a href="https://ckeditor.com/" target="_blank">CKEditor 5.0</a>.
 </p>
 <?php
 SettingsForm::done();
 SettingsForm::end();
 
-$OUTPUT->helpModal("Annotation Tool",
-    "You can edit and annotate formatted text with this tool.  Your teacher can also annotate your document.
-    To annotate, simply highlight text and an edit dialog will pop up so you can add, edit, or delete a comment.");
+$OUTPUT->helpModal("MiniPaper Tool",
+    "You can edit and submit your paper using this tool. Your teacher can review your submission and provide feedback through comments.");
 
 if ( U::strlen($inst_note) > 0 ) {
     echo($OUTPUT->modalString(__("Instructor Note"), htmlentities($inst_note), "noteModal"));
@@ -107,7 +98,6 @@ if ( U::strlen($old_content) < 1 ) {
     </div>
 <?php
 $OUTPUT->footerStart();
-echo(Annotate::footer($user_id));
 // https://github.com/jitbit/HtmlSanitizer
 ?>
 <script src="https://cdn.jsdelivr.net/gh/jitbit/HtmlSanitizer@master/HtmlSanitizer.js"></script>
@@ -118,7 +108,6 @@ $(document).ready( function () {
       $('#output_div').html(html);
       $('#spinner').hide();
       $('#output_div').show();
-      tsugiStartAnnotation('#output_div');
     })
   }
 );
