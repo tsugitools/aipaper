@@ -97,7 +97,7 @@ if ( count($_POST) > 0 && isset($_POST['submit_paper']) ) {
     $_SESSION['success'] = $USER->instructor ? 'Instructions updated' : 'Paper submitted';
     header( 'Location: '.addSession('index.php') ) ;
     return;
-}
+} 
 
 $menu = new \Tsugi\UI\MenuSet();
 $menu->addLeft(__('Main'), 'index');
@@ -136,7 +136,7 @@ $OUTPUT->flashMessages();
     </ul>
     <div class="tab-content">
         <div role="tabpanel" class="tab-pane active" id="instructions">
-            <form method="post">
+    <form method="post">
                 <div class="ckeditor-container">
                     <textarea name="instructions" id="editor_instructions"><?= htmlentities($instructions ?? '') ?></textarea>
                 </div>
@@ -195,7 +195,7 @@ $OUTPUT->flashMessages();
                 <input type="submit" name="submit_paper" value="<?= $is_submitted ? 'Update Submission' : 'Submit Paper' ?>" class="btn btn-primary">
             </p>
         <?php } ?>
-        </form>
+    </form>
     </div>
 <?php } ?>
 
@@ -223,13 +223,13 @@ ClassicEditor.defaultConfig = {
         ]
     }
 };
-
+    
 var editors = {};
 
 $(document).ready( function () {
     <?php if ( $USER->instructor ) { ?>
         // Instructor: Instructions editor
-        ClassicEditor
+      ClassicEditor
             .create( document.querySelector( '#editor_instructions' ), ClassicEditor.defaultConfig )
             .then(editor => {
                 editors['instructions'] = editor;
@@ -244,7 +244,7 @@ $(document).ready( function () {
                 .create( document.querySelector( '#editor_submission' ), ClassicEditor.defaultConfig )
                 .then(editor => {
                     editors['submission'] = editor;
-                })
+    })
                 .catch( error => {
                     console.error( error );
                 });

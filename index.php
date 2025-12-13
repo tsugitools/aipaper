@@ -147,7 +147,7 @@ $OUTPUT->topNav($menu);
 $OUTPUT->flashMessages();
 
 if ( $USER->instructor ) {
-    SettingsForm::start();
+SettingsForm::start();
     SettingsForm::text('totalpoints', __('Overall points for this assignment'));
     SettingsForm::text('instructorpoints', __('Instructor grade points (out of total points)'));
     SettingsForm::text('commentpoints', __('Points earned for each comment on another student\'s submission'));
@@ -155,8 +155,8 @@ if ( $USER->instructor ) {
     SettingsForm::checkbox('limitreviews', __('Limit students to reviewing a subset of submissions'));
     SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
     SettingsForm::dueDate();
-    SettingsForm::done();
-    SettingsForm::end();
+SettingsForm::done();
+SettingsForm::end();
 }
 
 $OUTPUT->welcomeUserCourse();
