@@ -191,7 +191,7 @@ if ( $LAUNCH->user->instructor ) {
     $menu->addLeft(__('Main'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="main" style="cursor: pointer;"');
     $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
     $menu->addLeft(__('Paper'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="submission" style="cursor: pointer;"');
-    $menu->addLeft(__('AI Enhanced'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_enhanced" style="cursor: pointer;"');
+    $menu->addLeft(__('Paper+AI'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_enhanced" style="cursor: pointer;"');
     
     if ( U::strlen($inst_note) > 0 ) $menu->addRight(__('Note'), '#', /* push */ false, 'data-toggle="modal" data-target="#noteModal"');
     // Add Save and Submit buttons to menu if student can edit
@@ -307,7 +307,7 @@ if ( U::strlen($inst_note) > 0 ) {
     </div>
     
     <div class="student-section" id="section-submission">
-        <h3>Paper</h3>
+        <p>Write your paper here. You can use AI to research and write your paper.  Do not use AI to write, rewrite or enhance your paper in any way. Spelling errors, grammar errors, and other minor mistakes are OK. This is your original work.</p>
         <?php if ( !$can_edit ) { ?>
             <div class="alert alert-info">Your submission has been submitted and cannot be edited.</div>
             <div class="ckeditor-container">
@@ -321,7 +321,7 @@ if ( U::strlen($inst_note) > 0 ) {
     </div>
     
     <div class="student-section" id="section-ai_enhanced">
-        <h3>AI Enhanced Submission</h3>
+        <p>Optionally, you can use AI to enhance your paper and include the AI Enhanced version of your paper here.  If both are submited reviewrs and graders will look at both.</p>
         <?php if ( !$can_edit ) { ?>
             <div class="alert alert-info">Your AI enhanced submission cannot be edited.</div>
             <div class="ckeditor-container">
