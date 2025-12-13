@@ -157,7 +157,17 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
     if ( $USER->instructor ) {
         $_SESSION['success'] = 'Instructions updated';
     } else {
-        $_SESSION['success'] = $is_submit ? 'Paper submitted' : 'Paper saved';
+        if ( $is_submit ) {
+            $success_msg = 'Paper submitted';
+            if ( $resubmit_allowed ) {
+                $success_msg .= '. You can reset your submission from the Main page if you need to make changes.';
+            } else {
+                $success_msg .= '. Your submission is now locked and cannot be edited.';
+            }
+            $_SESSION['success'] = $success_msg;
+        } else {
+            $_SESSION['success'] = 'Draft saved';
+        }
     }
     header( 'Location: '.addSession('index.php') ) ;
     return;
@@ -172,7 +182,7 @@ if ( $LAUNCH->user->instructor ) {
     if ( $CFG->launchactivity ) {
         $submenu->addLink(__('Analytics'), 'analytics');
     }
-    $menu->addRight(__('Help'), '#', /* push */ false, 'data-toggle="modal" data-target="#helpModal"');
+    $menu->addRight(__('Help'), 'help.php');
     $menu->addRight(__('Instructor'), $submenu, /* push */ false);
 } else {
     // Add navigation items to menu
@@ -182,12 +192,10 @@ if ( $LAUNCH->user->instructor ) {
     $menu->addLeft(__('AI Enhanced'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_enhanced" style="cursor: pointer;"');
     
     if ( U::strlen($inst_note) > 0 ) $menu->addRight(__('Note'), '#', /* push */ false, 'data-toggle="modal" data-target="#noteModal"');
-    $menu->addRight(__('Help'), '#', /* push */ false, 'data-toggle="modal" data-target="#helpModal"');
-    $menu->addRight(__('Settings'), '#', /* push */ false, SettingsForm::attr());
     // Add Save and Submit buttons to menu if student can edit
     if ( $can_edit ) {
-        $menu->addRight(__('Save'), '#', /* push */ false, 'id="menu-save-btn" style="cursor: pointer;"');
-        $submit_text = $is_submitted ? __('Update Submission') : __('Submit Paper');
+        $menu->addRight(__('Save Draft'), '#', /* push */ false, 'id="menu-save-btn" style="cursor: pointer;"');
+        $submit_text = __('Submit Paper');
         $menu->addRight($submit_text, '#', /* push */ false, 'id="menu-submit-btn" style="cursor: pointer; font-weight: bold;"');
     }
 }
@@ -223,9 +231,6 @@ $OUTPUT->welcomeUserCourse();
 if ( $dueDate->message ) {
     echo('<p style="color:red;">'.$dueDate->message.'</p>'."\n");
 }
-
-$OUTPUT->helpModal("MiniPaper Tool",
-    "You can edit and submit your paper using this tool. Your teacher can review your submission and provide feedback through comments.");
 
 if ( U::strlen($inst_note) > 0 ) {
     echo($OUTPUT->modalString(__("Instructor Note"), htmlentities($inst_note ?? ''), "noteModal"));
@@ -281,7 +286,7 @@ if ( U::strlen($inst_note) > 0 ) {
             </div>
         <?php } ?>
         
-        <?php if ( $is_submitted ) { ?>
+        <?php if ( $is_submitted && $resubmit_allowed ) { ?>
             <div style="margin-top: 20px;">
                 <button type="button" class="btn btn-warning" id="reset-submission-btn">Reset Submission</button>
             </div>
