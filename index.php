@@ -2,6 +2,7 @@
 require_once "../config.php";
 
 use \Tsugi\Util\U;
+use \Tsugi\Util\FakeName;
 use \Tsugi\Core\LTIX;
 use \Tsugi\Core\Settings;
 use \Tsugi\UI\SettingsForm;
@@ -148,10 +149,11 @@ $OUTPUT->flashMessages();
 
 if ( $USER->instructor ) {
 SettingsForm::start();
-    SettingsForm::note(__('overall_points = instructor_points + (comment_points * min_comments). Grades will only be sent for this activity if overall_points > 0.'));
     SettingsForm::text('instructorpoints', __('Instructor grade points (can be zero)'));
     SettingsForm::text('commentpoints', __('Points earned for each comment (can be zero)'));
     SettingsForm::text('mincomments', __('Minimum number of comments per student (can be zero)'));
+    SettingsForm::note(__('overall_points = instructor_points + (comment_points * min_comments). Grades will only be sent for this activity if overall_points > 0.'));
+    SettingsForm::checkbox('userealnames', __('Use actual student names instead of generated names'));
     SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
     SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
     SettingsForm::dueDate();
