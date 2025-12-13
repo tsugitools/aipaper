@@ -178,12 +178,12 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
 $menu = new \Tsugi\UI\MenuSet();
 
 if ( $LAUNCH->user->instructor ) {
-    $submenu = new \Tsugi\UI\Menu();
-    $submenu->addLink(__('Student Data'), 'grades');
-    $submenu->addLink(__('Settings'), '#', /* push */ false, SettingsForm::attr());
+    $menu->addLeft(__('Student Data'), 'grades');
     if ( $CFG->launchactivity ) {
-        $submenu->addLink(__('Analytics'), 'analytics');
+        $menu->addLeft(__('Analytics'), 'analytics');
     }
+    $submenu = new \Tsugi\UI\Menu();
+    $submenu->addLink(__('Settings'), '#', /* push */ false, SettingsForm::attr());
     $menu->addRight(__('Help'), 'help.php');
     $menu->addRight(__('Instructor'), $submenu, /* push */ false);
 } else {
@@ -321,7 +321,7 @@ if ( U::strlen($inst_note) > 0 ) {
     </div>
     
     <div class="student-section" id="section-ai_enhanced">
-        <p>Optionally, you can use AI to enhance your paper and include the AI Enhanced version of your paper here.  If both are submited reviewrs and graders will look at both.</p>
+        <p>Optionally, you can use AI to enhance your paper and include the AI Enhanced version of your paper here.  If both are submitted reviewrs and graders will look at both.</p>
         <?php if ( !$can_edit ) { ?>
             <div class="alert alert-info">Your AI enhanced submission cannot be edited.</div>
             <div class="ckeditor-container">
