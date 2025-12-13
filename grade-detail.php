@@ -51,6 +51,53 @@ $inst_note = $LAUNCH->result->getNote($user_id);
 $gradeurl = Table::makeUrl('grade-detail.php', $getparms);
 $gradesurl = Table::makeUrl('grades.php', $getparms);
 
+// Handle reset submission
+if ( isset($_POST['resetSubmission']) ) {
+    $p = $CFG->dbprefix;
+    
+    // Get result_id for this user
+    $result_row = $PDOX->rowDie(
+        "SELECT result_id FROM {$p}lti_result WHERE user_id = :UID AND link_id = :LID",
+        array(':UID' => $user_id, ':LID' => $LAUNCH->link->id)
+    );
+    
+    if ( $result_row ) {
+        $result_id = $result_row['result_id'];
+        
+        // Get current JSON to update submission status
+        $paper_row = $PDOX->rowDie(
+            "SELECT json FROM {$p}aipaper_result WHERE result_id = :RID",
+            array(':RID' => $result_id)
+        );
+        
+        $paper_json = json_decode($paper_row['json'] ?? '{}');
+        if ( !is_object($paper_json) ) $paper_json = new \stdClass();
+        $paper_json->submitted = false; // Mark as not submitted
+        $json_str = json_encode($paper_json);
+        
+        // Update submission status (keep the text, just mark as not submitted)
+        $PDOX->queryDie(
+            "UPDATE {$p}aipaper_result 
+             SET json = :JSON, updated_at = NOW()
+             WHERE result_id = :RID",
+            array(':JSON' => $json_str, ':RID' => $result_id)
+        );
+        
+        // Delete all comments on this submission
+        $PDOX->queryDie(
+            "DELETE FROM {$p}aipaper_comment WHERE result_id = :RID",
+            array(':RID' => $result_id)
+        );
+        
+        $_SESSION['success'] = 'Submission reset. Student can now edit their submission.';
+    } else {
+        $_SESSION['error'] = 'No submission found to reset.';
+    }
+    
+    header( 'Location: '.addSession($gradeurl) ) ;
+    return;
+}
+
 // Handle incoming post to set the instructor points and update the grade
 if ( isset($_POST['instSubmit']) || isset($_POST['instSubmitAdvance']) ) {
 
@@ -159,6 +206,37 @@ echo('<label for="inst_note">Instructor Note To Student</label><br/>
 echo(htmlentities($inst_note??''));
 echo('</textarea><br/>
       <input type="submit" name="instSubmit" value="Update" class="btn btn-primary">');
+echo('</form>');
+
+// Reset submission button (separate form)
+$p = $CFG->dbprefix;
+$result_row = $PDOX->rowDie(
+    "SELECT result_id FROM {$p}lti_result WHERE user_id = :UID AND link_id = :LID",
+    array(':UID' => $user_id, ':LID' => $LAUNCH->link->id)
+);
+
+if ( $result_row ) {
+    $result_id = $result_row['result_id'];
+    $paper_row = $PDOX->rowDie(
+        "SELECT raw_submission, json FROM {$p}aipaper_result WHERE result_id = :RID",
+        array(':RID' => $result_id)
+    );
+    
+    if ( $paper_row ) {
+        // Check if submitted from JSON
+        $paper_json = json_decode($paper_row['json'] ?? '{}');
+        if ( !is_object($paper_json) ) $paper_json = new \stdClass();
+        $is_submitted = isset($paper_json->submitted) && $paper_json->submitted === true;
+        
+        if ( $is_submitted ) {
+            echo('<form method="post" style="margin-top: 20px;">
+                  <input type="hidden" name="user_id" value="'.$user_id.'">');
+            echo('<input type="submit" name="resetSubmission" value="Reset Student Submission" class="btn btn-warning" 
+                  onclick="return confirm(\'Are you sure you want to reset this submission? This will make it editable again and delete all comments.\');">');
+            echo('</form>');
+        }
+    }
+}
 
 if ( $next_user_id_ungraded !== false ) {
     echo(' <input type="submit" name="instSubmitAdvance" value="Update and Go To Next Ungraded Student" class="btn btn-primary">');

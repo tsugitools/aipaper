@@ -39,7 +39,7 @@ if ( ! $result_id ) {
 
 // Load or create aipaper_result record
 $paper_row = $PDOX->rowDie(
-    "SELECT raw_submission, ai_enhanced_submission, student_comment, flagged, flagged_by
+    "SELECT raw_submission, ai_enhanced_submission, student_comment, flagged, flagged_by, json
      FROM {$p}aipaper_result WHERE result_id = :RID",
     array(':RID' => $result_id)
 );
@@ -55,12 +55,15 @@ if ( $paper_row === false ) {
         'ai_enhanced_submission' => '',
         'student_comment' => '',
         'flagged' => false,
-        'flagged_by' => null
+        'flagged_by' => null,
+        'json' => null
     );
 }
 
-// Check if submitted (has raw_submission content)
-$is_submitted = U::isNotEmpty($paper_row['raw_submission']);
+// Check submission status from JSON field
+$paper_json = json_decode($paper_row['json'] ?? '{}');
+if ( !is_object($paper_json) ) $paper_json = new \stdClass();
+$is_submitted = isset($paper_json->submitted) && $paper_json->submitted === true;
 
 // Check if resubmit is allowed
 $resubmit_allowed = Settings::linkGet('resubmit', false);
@@ -87,24 +90,33 @@ if ( count($_POST) > 0 && isset($_POST['submit_paper']) ) {
         Settings::linkSet('instructions', $instructions);
     }
 
+    // Update submission status in JSON
+    $paper_json = json_decode($paper_row['json'] ?? '{}');
+    if ( !is_object($paper_json) ) $paper_json = new \stdClass();
+    $was_submitted = isset($paper_json->submitted) && $paper_json->submitted === true;
+    
+    // Mark as submitted if this is the first submission
+    if ( !$was_submitted && U::isNotEmpty($raw_submission) ) {
+        $paper_json->submitted = true;
+        $RESULT->notifyReadyToGrade();
+    }
+    
+    $json_str = json_encode($paper_json);
+
     // Update aipaper_result
     $PDOX->queryDie(
         "UPDATE {$p}aipaper_result 
          SET raw_submission = :RAW, ai_enhanced_submission = :AI, 
-             student_comment = :COMMENT, updated_at = NOW()
+             student_comment = :COMMENT, json = :JSON, updated_at = NOW()
          WHERE result_id = :RID",
         array(
             ':RAW' => $raw_submission,
             ':AI' => $ai_enhanced,
             ':COMMENT' => $student_comment,
+            ':JSON' => $json_str,
             ':RID' => $result_id
         )
     );
-
-    if ( !$is_submitted && U::isNotEmpty($raw_submission) ) {
-        // First submission - notify ready to grade
-        $RESULT->notifyReadyToGrade();
-    }
 
     $_SESSION['success'] = $USER->instructor ? 'Instructions updated' : 'Paper submitted';
     header( 'Location: '.addSession('index.php') ) ;
@@ -224,7 +236,10 @@ if ( U::strlen($inst_note) > 0 ) {
         </div>
         <?php if ( $can_edit ) { ?>
             <p style="margin-top: 20px;">
-                <input type="submit" name="submit_paper" value="<?= $is_submitted ? 'Update Submission' : 'Submit Paper' ?>" class="btn btn-primary">
+                <input type="submit" name="submit_paper" value="<?= $is_submitted ? 'Update Submission' : 'Submit Paper' ?>" class="btn btn-primary"
+                <?php if ( !$is_submitted ) { ?>
+                    onclick="return confirm('Are you sure you want to submit your paper? Once submitted, neither your submission nor your AI enhanced submission will be editable unless your instructor resets your submission.');"
+                <?php } ?>>
             </p>
         <?php } ?>
     </div>
