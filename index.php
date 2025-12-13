@@ -73,6 +73,39 @@ $can_edit = !$is_submitted || $resubmit_allowed || $USER->instructor;
 // Load instructions from settings
 $instructions = Settings::linkGet('instructions', '');
 
+// Handle reset submission
+if ( count($_POST) > 0 && isset($_POST['reset_submission']) ) {
+    // Allow reset if instructor, or if resubmit is allowed, or if submission has been submitted
+    // (Since the button only shows when submitted, this check ensures reset is allowed)
+    if ( !$USER->instructor && !$resubmit_allowed && !$is_submitted ) {
+        $_SESSION['error'] = 'Reset not allowed';
+        header( 'Location: '.addSession('index.php') ) ;
+        return;
+    }
+    
+    // Reset submission status (keep content, just make it editable again)
+    $paper_json = json_decode($paper_row['json'] ?? '{}');
+    if ( !is_object($paper_json) ) $paper_json = new \stdClass();
+    unset($paper_json->submitted);
+    
+    $json_str = json_encode($paper_json);
+    
+    // Reset submitted status but keep all content (paper, AI enhanced, comments)
+    $PDOX->queryDie(
+        "UPDATE {$p}aipaper_result 
+         SET json = :JSON, updated_at = NOW()
+         WHERE result_id = :RID",
+        array(
+            ':JSON' => $json_str,
+            ':RID' => $result_id
+        )
+    );
+    
+    $_SESSION['success'] = 'Submission has been reset. Your paper and AI enhanced content are now editable again.';
+    header( 'Location: '.addSession('index.php') ) ;
+    return;
+}
+
 // Handle POST submission
 if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_paper'])) ) {
     $is_submit = isset($_POST['submit_paper']);
@@ -142,9 +175,21 @@ if ( $LAUNCH->user->instructor ) {
     $menu->addRight(__('Help'), '#', /* push */ false, 'data-toggle="modal" data-target="#helpModal"');
     $menu->addRight(__('Instructor'), $submenu, /* push */ false);
 } else {
+    // Add navigation items to menu
+    $menu->addLeft(__('Main'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="main" style="cursor: pointer;"');
+    $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
+    $menu->addLeft(__('Paper'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="submission" style="cursor: pointer;"');
+    $menu->addLeft(__('AI Enhanced'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_enhanced" style="cursor: pointer;"');
+    
     if ( U::strlen($inst_note) > 0 ) $menu->addRight(__('Note'), '#', /* push */ false, 'data-toggle="modal" data-target="#noteModal"');
     $menu->addRight(__('Help'), '#', /* push */ false, 'data-toggle="modal" data-target="#helpModal"');
     $menu->addRight(__('Settings'), '#', /* push */ false, SettingsForm::attr());
+    // Add Save and Submit buttons to menu if student can edit
+    if ( $can_edit ) {
+        $menu->addRight(__('Save'), '#', /* push */ false, 'id="menu-save-btn" style="cursor: pointer;"');
+        $submit_text = $is_submitted ? __('Update Submission') : __('Submit Paper');
+        $menu->addRight($submit_text, '#', /* push */ false, 'id="menu-submit-btn" style="cursor: pointer; font-weight: bold;"');
+    }
 }
 
 // Render view
@@ -188,9 +233,21 @@ if ( U::strlen($inst_note) > 0 ) {
 
 ?>
 <style>
-.nav-tabs { margin-bottom: 20px; }
-.tab-content { padding: 20px; border: 1px solid #ddd; border-top: none; min-height: 25em; }
+.student-section {
+    display: none;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    min-height: 25em;
+}
+.student-section.active {
+    display: block;
+}
 .ckeditor-container { min-height: 25em; }
+.tsugi-nav-link.active {
+    font-weight: bold;
+    text-decoration: underline;
+}
 </style>
 
 <?php if ( $USER->instructor ) { ?>
@@ -203,61 +260,77 @@ if ( U::strlen($inst_note) > 0 ) {
         <p><input type="submit" name="submit_paper" value="Save Instructions" class="btn btn-primary"></p>
     </form>
 <?php } else { ?>
-    <!-- Student: Three tabs -->
+    <!-- Student: Sections with Tsugi menu navigation -->
     <form method="post" id="paper_form">
-    <ul class="nav nav-tabs" role="tablist">
-        <li role="presentation" class="active">
-            <a href="#submission" aria-controls="submission" role="tab" data-toggle="tab">Submission</a>
-        </li>
-        <li role="presentation">
-            <a href="#ai_enhanced" aria-controls="ai_enhanced" role="tab" data-toggle="tab">AI Enhanced Submission</a>
-        </li>
-        <li role="presentation">
-            <a href="#instructions" aria-controls="instructions" role="tab" data-toggle="tab">Instructions</a>
-        </li>
-    </ul>
-    <div class="tab-content">
-        <div role="tabpanel" class="tab-pane active" id="submission">
-            <?php if ( !$can_edit ) { ?>
-                <div class="alert alert-info">Your submission has been submitted and cannot be edited.</div>
-                <div class="ckeditor-container">
-                    <div id="display_submission"><?= htmlentities($paper_row['raw_submission'] ?? '') ?></div>
-                </div>
-            <?php } else { ?>
-                <div class="ckeditor-container">
-                    <textarea name="raw_submission" id="editor_submission"><?= htmlentities($paper_row['raw_submission'] ?? '') ?></textarea>
-                </div>
-            <?php } ?>
-        </div>
-        <div role="tabpanel" class="tab-pane" id="ai_enhanced">
-            <?php if ( !$can_edit ) { ?>
-                <div class="alert alert-info">Your AI enhanced submission cannot be edited.</div>
-                <div class="ckeditor-container">
-                    <div id="display_ai_enhanced"><?= htmlentities($paper_row['ai_enhanced_submission'] ?? '') ?></div>
-                </div>
-            <?php } else { ?>
-                <div class="ckeditor-container">
-                    <textarea name="ai_enhanced_submission" id="editor_ai_enhanced"><?= htmlentities($paper_row['ai_enhanced_submission'] ?? '') ?></textarea>
-                </div>
-                <p><em>This field is optional. You can enhance your submission using AI tools.</em></p>
-            <?php } ?>
-        </div>
-        <div role="tabpanel" class="tab-pane" id="instructions">
-            <div class="ckeditor-container">
-                <div id="display_instructions"><?= htmlentities($instructions ?? '') ?></div>
+    <div class="student-section active" id="section-main">
+        <h3>Welcome</h3>
+        <p>Use the menu at the top to navigate between sections:</p>
+        <ul>
+            <li><strong>Main</strong> - This overview page</li>
+            <li><strong>Instructions</strong> - Read the assignment instructions and rubric</li>
+            <li><strong>Paper</strong> - Write and edit your paper submission</li>
+            <li><strong>AI Enhanced</strong> - Optionally add an AI-enhanced version of your submission</li>
+        </ul>
+        <?php if ( $is_submitted ) { ?>
+            <div class="alert alert-success" style="margin-top: 20px;">
+                <strong>Status:</strong> Your paper has been submitted.
             </div>
-            <p><em>Read-only instructions from your instructor.</em></p>
-        </div>
-        <?php if ( $can_edit ) { ?>
-            <p style="margin-top: 20px;">
-                <input type="submit" name="save_paper" value="Save" class="btn btn-default">
-                <input type="submit" name="submit_paper" value="<?= $is_submitted ? 'Update Submission' : 'Submit Paper' ?>" class="btn btn-primary"
-                <?php if ( !$is_submitted ) { ?>
-                    onclick="return confirm('Are you sure you want to submit your paper? Once submitted, neither your submission nor your AI enhanced submission will be editable unless your instructor resets your submission.');"
-                <?php } ?>>
-            </p>
+        <?php } else { ?>
+            <div class="alert alert-info" style="margin-top: 20px;">
+                <strong>Status:</strong> Your paper has not been submitted yet. Use the Paper and AI Enhanced sections to write and submit your paper.
+            </div>
+        <?php } ?>
+        
+        <?php if ( $is_submitted ) { ?>
+            <div style="margin-top: 20px;">
+                <button type="button" class="btn btn-warning" id="reset-submission-btn">Reset Submission</button>
+            </div>
         <?php } ?>
     </div>
+    
+    <div class="student-section" id="section-instructions">
+        <h3>Instructions / Rubric</h3>
+        <div class="ckeditor-container">
+            <div id="display_instructions"><?= htmlentities($instructions ?? '') ?></div>
+        </div>
+        <p><em>Read-only instructions from your instructor.</em></p>
+    </div>
+    
+    <div class="student-section" id="section-submission">
+        <h3>Paper</h3>
+        <?php if ( !$can_edit ) { ?>
+            <div class="alert alert-info">Your submission has been submitted and cannot be edited.</div>
+            <div class="ckeditor-container">
+                <div id="display_submission"><?= htmlentities($paper_row['raw_submission'] ?? '') ?></div>
+            </div>
+        <?php } else { ?>
+            <div class="ckeditor-container">
+                <textarea name="raw_submission" id="editor_submission"><?= htmlentities($paper_row['raw_submission'] ?? '') ?></textarea>
+            </div>
+        <?php } ?>
+    </div>
+    
+    <div class="student-section" id="section-ai_enhanced">
+        <h3>AI Enhanced Submission</h3>
+        <?php if ( !$can_edit ) { ?>
+            <div class="alert alert-info">Your AI enhanced submission cannot be edited.</div>
+            <div class="ckeditor-container">
+                <div id="display_ai_enhanced"><?= htmlentities($paper_row['ai_enhanced_submission'] ?? '') ?></div>
+            </div>
+        <?php } else { ?>
+            <div class="ckeditor-container">
+                <textarea name="ai_enhanced_submission" id="editor_ai_enhanced"><?= htmlentities($paper_row['ai_enhanced_submission'] ?? '') ?></textarea>
+            </div>
+            <p><em>This field is optional. You can enhance your submission using AI tools.</em></p>
+        <?php } ?>
+    </div>
+    <?php if ( $can_edit ) { ?>
+        <!-- Hidden submit buttons for menu triggers -->
+        <input type="submit" name="save_paper" id="hidden-save-btn" style="display: none;">
+        <input type="submit" name="submit_paper" id="hidden-submit-btn" style="display: none;">
+    <?php } ?>
+    <!-- Hidden submit button for reset -->
+    <input type="submit" name="reset_submission" id="hidden-reset-btn" style="display: none;">
     </form>
 <?php } ?>
 
@@ -331,6 +404,68 @@ $(document).ready( function () {
         // Instructions display
         var instructionsHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($instructions ?? '') ?>);
         $('#display_instructions').html(instructionsHtml);
+        
+        // Handle Tsugi menu navigation clicks
+        $('.tsugi-nav-link').on('click', function(e) {
+            e.preventDefault();
+            var section = $(this).data('section');
+            
+            // Remove active class from all navigation links and sections
+            $('.tsugi-nav-link').removeClass('active');
+            $('.student-section').removeClass('active');
+            
+            // Add active class to clicked link and corresponding section
+            $(this).addClass('active');
+            $('#section-' + section).addClass('active');
+        });
+        
+        // Set Main as active by default
+        $('.tsugi-nav-link[data-section="main"]').addClass('active');
+        
+        // Handle menu Save button click
+        $('#menu-save-btn').on('click', function(e) {
+            e.preventDefault();
+            <?php if ( $can_edit ) { ?>
+                // Update form fields with editor content before submitting
+                if ( editors['submission'] ) {
+                    $('#editor_submission').val(editors['submission'].getData());
+                }
+                if ( editors['ai_enhanced'] ) {
+                    $('#editor_ai_enhanced').val(editors['ai_enhanced'].getData());
+                }
+                // Trigger the hidden save button
+                $('#hidden-save-btn').click();
+            <?php } ?>
+        });
+        
+        // Handle menu Submit button click
+        $('#menu-submit-btn').on('click', function(e) {
+            e.preventDefault();
+            <?php if ( $can_edit ) { ?>
+                <?php if ( !$is_submitted ) { ?>
+                    if ( !confirm('Are you sure you want to submit your paper? Once submitted, neither your submission nor your AI enhanced submission will be editable unless your instructor resets your submission.') ) {
+                        return;
+                    }
+                <?php } ?>
+                // Update form fields with editor content before submitting
+                if ( editors['submission'] ) {
+                    $('#editor_submission').val(editors['submission'].getData());
+                }
+                if ( editors['ai_enhanced'] ) {
+                    $('#editor_ai_enhanced').val(editors['ai_enhanced'].getData());
+                }
+                // Trigger the hidden submit button
+                $('#hidden-submit-btn').click();
+            <?php } ?>
+        });
+        
+        // Handle Reset Submission button click
+        $('#reset-submission-btn').on('click', function(e) {
+            e.preventDefault();
+            if ( confirm('Are you sure you want to reset your submission? This will delete all your submission content, AI enhanced content, and all comments. This action cannot be undone.') ) {
+                $('#hidden-reset-btn').click();
+            }
+        });
     <?php } ?>
 
     // Handle form submission - get data from editors
