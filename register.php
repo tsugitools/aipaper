@@ -1,9 +1,9 @@
 <?php
 
 $REGISTER_LTI2 = array(
-"name" => "MiniPaper",
+"name" => "AI Paper",
 "FontAwesome" => "fa-align-left",
-"short_name" => "MiniPaper",
+"short_name" => "AI Paper",
 "description" => "A tool to collect and grade short papers written with AI assistance. Students submit papers using CKEditor 5.0, with feedback provided through comment streams. Supports instructor grading, peer review comments, and optional AI-generated feedback.",
     // By default, accept launch messages..
     "messages" => array("launch"),
@@ -25,7 +25,7 @@ $REGISTER_LTI2 = array(
     "video" => "https://www.youtube.com/watch?v=n2qz6XpxZ1Q",
     "submissionReview" => array(
         "reviewableStatus" => array("InProgress", "Submitted", "Completed"),
-        "label" => "MiniPaper",
+        "label" => "AI Paper",
         "url" => "grade-detail.php",  // A relative URL in this context
         "custom" => array(
             "review_towel" => "42",

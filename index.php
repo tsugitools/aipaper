@@ -148,15 +148,21 @@ $OUTPUT->flashMessages();
 
 if ( $USER->instructor ) {
 SettingsForm::start();
-    SettingsForm::text('totalpoints', __('Overall points for this assignment'));
-    SettingsForm::text('instructorpoints', __('Instructor grade points (out of total points)'));
-    SettingsForm::text('commentpoints', __('Points earned for each comment on another student\'s submission'));
-    SettingsForm::text('maxreviews', __('Maximum number of peer reviews per student (leave blank for unlimited)'));
-    SettingsForm::checkbox('limitreviews', __('Limit students to reviewing a subset of submissions'));
+    SettingsForm::note(__('overall_points = instructor_points + (comment_points * min_comments). Grades will only be sent for this activity if overall_points > 0.'));
+    SettingsForm::text('instructorpoints', __('Instructor grade points (can be zero)'));
+    SettingsForm::text('commentpoints', __('Points earned for each comment (can be zero)'));
+    SettingsForm::text('mincomments', __('Minimum number of comments per student (can be zero)'));
+    SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
     SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
     SettingsForm::dueDate();
-SettingsForm::done();
-SettingsForm::end();
+    SettingsForm::done();
+    SettingsForm::end();
+} else {
+    SettingsForm::start();
+    SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
+    SettingsForm::dueDate();
+    SettingsForm::done();
+    SettingsForm::end();
 }
 
 $OUTPUT->welcomeUserCourse();
