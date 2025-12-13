@@ -68,7 +68,9 @@ $is_submitted = isset($paper_json->submitted) && $paper_json->submitted === true
 
 // Check if resubmit is allowed
 $resubmit_allowed = Settings::linkGet('resubmit', false);
-$can_edit = !$is_submitted || $resubmit_allowed || $USER->instructor;
+// Can edit only if not submitted (or if instructor)
+// Resubmit setting only controls Reset button visibility, not editability
+$can_edit = !$is_submitted || $USER->instructor;
 
 // Load instructions from settings
 $instructions = Settings::linkGet('instructions', '');
@@ -226,12 +228,6 @@ SettingsForm::start();
     SettingsForm::end();
 }
 
-$OUTPUT->welcomeUserCourse();
-
-if ( $dueDate->message ) {
-    echo('<p style="color:red;">'.$dueDate->message.'</p>'."\n");
-}
-
 if ( U::strlen($inst_note) > 0 ) {
     echo($OUTPUT->modalString(__("Instructor Note"), htmlentities($inst_note ?? ''), "noteModal"));
 }
@@ -257,6 +253,10 @@ if ( U::strlen($inst_note) > 0 ) {
 
 <?php if ( $USER->instructor ) { ?>
     <!-- Instructor: Instructions editor (no tabs) -->
+    <?php $OUTPUT->welcomeUserCourse(); ?>
+    <?php if ( $dueDate->message ) { ?>
+        <p style="color:red;"><?= htmlentities($dueDate->message) ?></p>
+    <?php } ?>
     <h3>Instructions / Rubric</h3>
     <form method="post">
         <div class="ckeditor-container">
@@ -268,7 +268,12 @@ if ( U::strlen($inst_note) > 0 ) {
     <!-- Student: Sections with Tsugi menu navigation -->
     <form method="post" id="paper_form">
     <div class="student-section active" id="section-main">
-        <h3>Welcome</h3>
+        <h3>
+        <?php $OUTPUT->welcomeUserCourse(); ?>
+</h3>
+        <?php if ( $dueDate->message ) { ?>
+            <p style="color:red;"><?= htmlentities($dueDate->message) ?></p>
+        <?php } ?>
         <p>Use the menu at the top to navigate between sections:</p>
         <ul>
             <li><strong>Main</strong> - This overview page</li>
