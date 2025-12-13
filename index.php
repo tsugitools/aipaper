@@ -1,9 +1,6 @@
 <?php
 require_once "../config.php";
 
-// The Tsugi PHP API Documentation is available at:
-// http://do1.dr-chuck.com/tsugi/phpdoc/
-
 use \Tsugi\Util\U;
 use \Tsugi\Core\LTIX;
 use \Tsugi\Core\Settings;
@@ -11,6 +8,7 @@ use \Tsugi\UI\SettingsForm;
 
 // No parameter means we require CONTEXT, USER, and LINK
 $LAUNCH = LTIX::requireData();
+$p = $CFG->dbprefix;
 
 // If settings were updated
 if ( SettingsForm::handleSettingsPost() ) {
@@ -22,7 +20,6 @@ if ( SettingsForm::handleSettingsPost() ) {
 // Grab the due date information
 $dueDate = SettingsForm::getDueDate();
 
-$next = U::safe_href(U::get($_GET, 'next', 'edit.php'));
 $user_id = U::safe_href(U::get($_GET, 'user_id'));
 if ( $user_id && ! $LAUNCH->user->instructor ) {
     http_response_code(403);
@@ -30,24 +27,91 @@ if ( $user_id && ! $LAUNCH->user->instructor ) {
 }
 if ( ! $user_id ) $user_id = $LAUNCH->user->id;
 
-$inst_note = $LAUNCH->result->getNote($user_id );
+$inst_note = $LAUNCH->result->getNote($user_id);
 
-// Load and parse the old JSON
-$json = $LAUNCH->result->getJsonForUser($user_id);
-$json = json_decode($json);
-if ( $json == null ) $json = new \stdClass();
-$lock = isset($json->lock) && $json->lock;
+// Get result_id for this user
+$result_id = $RESULT->id;
+if ( ! $result_id ) {
+    $_SESSION['error'] = 'No result record found';
+    header( 'Location: '.addSession('index.php') ) ;
+    return;
+}
 
-$edit_text = __('Edit');
-if ( $next != 'edit.php' ) $edit_text = __('Back');
-$load_url = $user_id ? 'load_text.php?user_id=' . $user_id : 'load_text.php';
+// Load or create aipaper_result record
+$paper_row = $PDOX->rowDie(
+    "SELECT raw_submission, ai_enhanced_submission, student_comment, flagged, flagged_by
+     FROM {$p}aipaper_result WHERE result_id = :RID",
+    array(':RID' => $result_id)
+);
+
+if ( $paper_row === false ) {
+    // Create new record
+    $PDOX->queryDie(
+        "INSERT INTO {$p}aipaper_result (result_id, created_at) VALUES (:RID, NOW())",
+        array(':RID' => $result_id)
+    );
+    $paper_row = array(
+        'raw_submission' => '',
+        'ai_enhanced_submission' => '',
+        'student_comment' => '',
+        'flagged' => false,
+        'flagged_by' => null
+    );
+}
+
+// Check if submitted (has raw_submission content)
+$is_submitted = U::isNotEmpty($paper_row['raw_submission']);
+
+// Check if resubmit is allowed
+$resubmit_allowed = Settings::linkGet('resubmit', false);
+$can_edit = !$is_submitted || $resubmit_allowed || $USER->instructor;
+
+// Load instructions from settings
+$instructions = Settings::linkGet('instructions', '');
+
+// Handle POST submission
+if ( count($_POST) > 0 && isset($_POST['submit_paper']) ) {
+    if ( !$can_edit && !$USER->instructor ) {
+        $_SESSION['error'] = 'Submission is locked';
+        header( 'Location: '.addSession('index.php') ) ;
+        return;
+    }
+
+    $raw_submission = U::get($_POST, 'raw_submission', '');
+    $ai_enhanced = U::get($_POST, 'ai_enhanced_submission', '');
+    $student_comment = U::get($_POST, 'student_comment', '');
+    
+    // For instructors, save instructions
+    if ( $USER->instructor ) {
+        $instructions = U::get($_POST, 'instructions', '');
+        Settings::linkSet('instructions', $instructions);
+    }
+
+    // Update aipaper_result
+    $PDOX->queryDie(
+        "UPDATE {$p}aipaper_result 
+         SET raw_submission = :RAW, ai_enhanced_submission = :AI, 
+             student_comment = :COMMENT, updated_at = NOW()
+         WHERE result_id = :RID",
+        array(
+            ':RAW' => $raw_submission,
+            ':AI' => $ai_enhanced,
+            ':COMMENT' => $student_comment,
+            ':RID' => $result_id
+        )
+    );
+
+    if ( !$is_submitted && U::isNotEmpty($raw_submission) ) {
+        // First submission - notify ready to grade
+        $RESULT->notifyReadyToGrade();
+    }
+
+    $_SESSION['success'] = $USER->instructor ? 'Instructions updated' : 'Paper submitted';
+    header( 'Location: '.addSession('index.php') ) ;
+    return;
+}
 
 $menu = new \Tsugi\UI\MenuSet();
-if ( $lock && ! $LAUNCH->user->instructor ) {
-    $menu->addLeft(__('Entry Locked'), false);
-} else {
-   $menu->addLeft($edit_text, $next);
-}
 
 if ( $LAUNCH->user->instructor ) {
     $submenu = new \Tsugi\UI\Menu();
@@ -64,8 +128,6 @@ if ( $LAUNCH->user->instructor ) {
     $menu->addRight(__('Settings'), '#', /* push */ false, SettingsForm::attr());
 }
 
-$old_content = $LAUNCH->result->getJsonKeyForUser('content', '', $user_id);
-
 // Render view
 $OUTPUT->header();
 $OUTPUT->bodyStart();
@@ -74,6 +136,12 @@ $OUTPUT->flashMessages();
 
 if ( $USER->instructor ) {
     SettingsForm::start();
+    SettingsForm::text('totalpoints', __('Overall points for this assignment'));
+    SettingsForm::text('instructorpoints', __('Instructor grade points (out of total points)'));
+    SettingsForm::text('commentpoints', __('Points earned for each comment on another student\'s submission'));
+    SettingsForm::text('maxreviews', __('Maximum number of peer reviews per student (leave blank for unlimited)'));
+    SettingsForm::checkbox('limitreviews', __('Limit students to reviewing a subset of submissions'));
+    SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
     SettingsForm::dueDate();
     SettingsForm::done();
     SettingsForm::end();
@@ -89,33 +157,165 @@ $OUTPUT->helpModal("MiniPaper Tool",
     "You can edit and submit your paper using this tool. Your teacher can review your submission and provide feedback through comments.");
 
 if ( U::strlen($inst_note) > 0 ) {
-    echo($OUTPUT->modalString(__("Instructor Note"), htmlentities($inst_note), "noteModal"));
+    echo($OUTPUT->modalString(__("Instructor Note"), htmlentities($inst_note ?? ''), "noteModal"));
 }
 
-if ( U::strlen($old_content) < 1 ) {
-    echo("<p>Please edit your submission.</p>\n");
-    $OUTPUT->footer();
-    return;
-}
 ?>
-    <div id="spinner"><img src="<?= $OUTPUT->getSpinnerUrl() ?>"/></div>
-    <div id="output_div" style="display: none;">
+<style>
+.nav-tabs { margin-bottom: 20px; }
+.tab-content { padding: 20px; border: 1px solid #ddd; border-top: none; min-height: 25em; }
+.ckeditor-container { min-height: 25em; }
+</style>
+
+<?php if ( $USER->instructor ) { ?>
+    <!-- Instructor: Instructions editor (no tabs) -->
+    <h3>Instructions / Rubric</h3>
+    <form method="post">
+        <div class="ckeditor-container">
+            <textarea name="instructions" id="editor_instructions"><?= htmlentities($instructions ?? '') ?></textarea>
+        </div>
+        <p><input type="submit" name="submit_paper" value="Save Instructions" class="btn btn-primary"></p>
+    </form>
+<?php } else { ?>
+    <!-- Student: Three tabs -->
+    <form method="post" id="paper_form">
+    <ul class="nav nav-tabs" role="tablist">
+        <li role="presentation" class="active">
+            <a href="#submission" aria-controls="submission" role="tab" data-toggle="tab">Submission</a>
+        </li>
+        <li role="presentation">
+            <a href="#ai_enhanced" aria-controls="ai_enhanced" role="tab" data-toggle="tab">AI Enhanced Submission</a>
+        </li>
+        <li role="presentation">
+            <a href="#instructions" aria-controls="instructions" role="tab" data-toggle="tab">Instructions</a>
+        </li>
+    </ul>
+    <div class="tab-content">
+        <div role="tabpanel" class="tab-pane active" id="submission">
+            <?php if ( !$can_edit ) { ?>
+                <div class="alert alert-info">Your submission has been submitted and cannot be edited.</div>
+                <div class="ckeditor-container">
+                    <div id="display_submission"><?= htmlentities($paper_row['raw_submission'] ?? '') ?></div>
+                </div>
+            <?php } else { ?>
+                <div class="ckeditor-container">
+                    <textarea name="raw_submission" id="editor_submission"><?= htmlentities($paper_row['raw_submission'] ?? '') ?></textarea>
+                </div>
+            <?php } ?>
+        </div>
+        <div role="tabpanel" class="tab-pane" id="ai_enhanced">
+            <?php if ( !$can_edit ) { ?>
+                <div class="alert alert-info">Your AI enhanced submission cannot be edited.</div>
+                <div class="ckeditor-container">
+                    <div id="display_ai_enhanced"><?= htmlentities($paper_row['ai_enhanced_submission'] ?? '') ?></div>
+                </div>
+            <?php } else { ?>
+                <div class="ckeditor-container">
+                    <textarea name="ai_enhanced_submission" id="editor_ai_enhanced"><?= htmlentities($paper_row['ai_enhanced_submission'] ?? '') ?></textarea>
+                </div>
+                <p><em>This field is optional. You can enhance your submission using AI tools.</em></p>
+            <?php } ?>
+        </div>
+        <div role="tabpanel" class="tab-pane" id="instructions">
+            <div class="ckeditor-container">
+                <div id="display_instructions"><?= htmlentities($instructions ?? '') ?></div>
+            </div>
+            <p><em>Read-only instructions from your instructor.</em></p>
+        </div>
+        <?php if ( $can_edit ) { ?>
+            <p style="margin-top: 20px;">
+                <input type="submit" name="submit_paper" value="<?= $is_submitted ? 'Update Submission' : 'Submit Paper' ?>" class="btn btn-primary">
+            </p>
+        <?php } ?>
     </div>
+    </form>
+<?php } ?>
+
 <?php
 $OUTPUT->footerStart();
-// https://github.com/jitbit/HtmlSanitizer
 ?>
 <script src="https://cdn.jsdelivr.net/gh/jitbit/HtmlSanitizer@master/HtmlSanitizer.js"></script>
+<script src="https://cdn.ckeditor.com/ckeditor5/16.0.0/classic/ckeditor.js"></script>
 <script type="text/javascript">
+ClassicEditor.defaultConfig = {
+    toolbar: {
+        items: [
+            'heading',
+            '|',
+            'bold',
+            'italic',
+            'link',
+            'bulletedList',
+            'numberedList',
+            'blockQuote',
+            'insertTable',
+            'mediaEmbed',
+            'undo',
+            'redo'
+        ]
+    }
+};
+
+var editors = {};
+
 $(document).ready( function () {
-    $.get('<?= addSession($load_url) ?>', function(data) {
-      var html = HtmlSanitizer.SanitizeHtml(data);
-      $('#output_div').html(html);
-      $('#spinner').hide();
-      $('#output_div').show();
-    })
-  }
-);
+    <?php if ( $USER->instructor ) { ?>
+        // Instructor: Instructions editor
+        ClassicEditor
+            .create( document.querySelector( '#editor_instructions' ), ClassicEditor.defaultConfig )
+            .then(editor => {
+                editors['instructions'] = editor;
+            })
+            .catch( error => {
+                console.error( error );
+            });
+    <?php } else { ?>
+        // Student: Submission and AI Enhanced editors (if editable)
+        <?php if ( $can_edit ) { ?>
+            ClassicEditor
+                .create( document.querySelector( '#editor_submission' ), ClassicEditor.defaultConfig )
+                .then(editor => {
+                    editors['submission'] = editor;
+                })
+                .catch( error => {
+                    console.error( error );
+                });
+
+            ClassicEditor
+                .create( document.querySelector( '#editor_ai_enhanced' ), ClassicEditor.defaultConfig )
+                .then(editor => {
+                    editors['ai_enhanced'] = editor;
+                })
+                .catch( error => {
+                    console.error( error );
+                });
+        <?php } else { ?>
+            // Display mode - sanitize HTML
+            var submissionHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($paper_row['raw_submission'] ?? '') ?>);
+            $('#display_submission').html(submissionHtml);
+            
+            var aiHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($paper_row['ai_enhanced_submission'] ?? '') ?>);
+            $('#display_ai_enhanced').html(aiHtml);
+        <?php } ?>
+        
+        // Instructions display
+        var instructionsHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($instructions ?? '') ?>);
+        $('#display_instructions').html(instructionsHtml);
+    <?php } ?>
+
+    // Handle form submission - get data from editors
+    $('#paper_form').on('submit', function(e) {
+        <?php if ( !$USER->instructor && $can_edit ) { ?>
+            // Update form fields with editor content
+            if ( editors['submission'] ) {
+                $('#editor_submission').val(editors['submission'].getData());
+            }
+            if ( editors['ai_enhanced'] ) {
+                $('#editor_ai_enhanced').val(editors['ai_enhanced'].getData());
+            }
+        <?php } ?>
+    });
+});
 </script>
 <?php
 $OUTPUT->footerEnd();
