@@ -74,7 +74,9 @@ $can_edit = !$is_submitted || $resubmit_allowed || $USER->instructor;
 $instructions = Settings::linkGet('instructions', '');
 
 // Handle POST submission
-if ( count($_POST) > 0 && isset($_POST['submit_paper']) ) {
+if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_paper'])) ) {
+    $is_submit = isset($_POST['submit_paper']);
+    
     if ( !$can_edit && !$USER->instructor ) {
         $_SESSION['error'] = 'Submission is locked';
         header( 'Location: '.addSession('index.php') ) ;
@@ -96,8 +98,8 @@ if ( count($_POST) > 0 && isset($_POST['submit_paper']) ) {
     if ( !is_object($paper_json) ) $paper_json = new \stdClass();
     $was_submitted = isset($paper_json->submitted) && $paper_json->submitted === true;
     
-    // Mark as submitted if this is the first submission
-    if ( !$was_submitted && U::isNotEmpty($raw_submission) ) {
+    // Mark as submitted only if Submit button was clicked (not Save)
+    if ( $is_submit && !$was_submitted && U::isNotEmpty($raw_submission) ) {
         $paper_json->submitted = true;
         $RESULT->notifyReadyToGrade();
     }
@@ -119,7 +121,11 @@ if ( count($_POST) > 0 && isset($_POST['submit_paper']) ) {
         )
     );
 
-    $_SESSION['success'] = $USER->instructor ? 'Instructions updated' : 'Paper submitted';
+    if ( $USER->instructor ) {
+        $_SESSION['success'] = 'Instructions updated';
+    } else {
+        $_SESSION['success'] = $is_submit ? 'Paper submitted' : 'Paper saved';
+    }
     header( 'Location: '.addSession('index.php') ) ;
     return;
 }
@@ -244,6 +250,7 @@ if ( U::strlen($inst_note) > 0 ) {
         </div>
         <?php if ( $can_edit ) { ?>
             <p style="margin-top: 20px;">
+                <input type="submit" name="save_paper" value="Save" class="btn btn-default">
                 <input type="submit" name="submit_paper" value="<?= $is_submitted ? 'Update Submission' : 'Submit Paper' ?>" class="btn btn-primary"
                 <?php if ( !$is_submitted ) { ?>
                     onclick="return confirm('Are you sure you want to submit your paper? Once submitted, neither your submission nor your AI enhanced submission will be editable unless your instructor resets your submission.');"
@@ -330,6 +337,19 @@ $(document).ready( function () {
     $('#paper_form').on('submit', function(e) {
         <?php if ( !$USER->instructor && $can_edit ) { ?>
             // Update form fields with editor content
+            if ( editors['submission'] ) {
+                $('#editor_submission').val(editors['submission'].getData());
+            }
+            if ( editors['ai_enhanced'] ) {
+                $('#editor_ai_enhanced').val(editors['ai_enhanced'].getData());
+            }
+        <?php } ?>
+    });
+    
+    // Handle Save button click
+    $('input[name="save_paper"]').on('click', function(e) {
+        <?php if ( !$USER->instructor && $can_edit ) { ?>
+            // Update form fields with editor content before submitting
             if ( editors['submission'] ) {
                 $('#editor_submission').val(editors['submission'].getData());
             }
