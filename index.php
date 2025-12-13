@@ -122,6 +122,13 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
     $ai_enhanced = U::get($_POST, 'ai_enhanced_submission', '');
     $student_comment = U::get($_POST, 'student_comment', '');
     
+    // Validate that paper is not blank when submitting (not when saving draft)
+    if ( $is_submit && !$USER->instructor && U::isEmpty($raw_submission) ) {
+        $_SESSION['error'] = 'Your paper cannot be blank. Please write your paper before submitting.';
+        header( 'Location: '.addSession('index.php') ) ;
+        return;
+    }
+    
     // For instructors, save instructions
     if ( $USER->instructor ) {
         $instructions = U::get($_POST, 'instructions', '');
@@ -190,10 +197,17 @@ if ( $LAUNCH->user->instructor ) {
     // Add navigation items to menu
     $menu->addLeft(__('Main'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="main" style="cursor: pointer;"');
     $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
-    $menu->addLeft(__('Paper'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="submission" style="cursor: pointer;"');
-    $menu->addLeft(__('Paper+AI'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_enhanced" style="cursor: pointer;"');
+    // Only show Paper and Paper+AI if not submitted
+    if ( !$is_submitted ) {
+        $menu->addLeft(__('Paper'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="submission" style="cursor: pointer;"');
+        $menu->addLeft(__('Paper+AI'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_enhanced" style="cursor: pointer;"');
+    }
     
     if ( U::strlen($inst_note) > 0 ) $menu->addRight(__('Note'), '#', /* push */ false, 'data-toggle="modal" data-target="#noteModal"');
+    // Add Reset Submission button if submitted and resubmit is allowed
+    if ( $is_submitted && $resubmit_allowed ) {
+        $menu->addRight(__('Reset Submission'), '#', /* push */ false, 'id="menu-reset-btn" style="cursor: pointer; color: #f0ad4e;"');
+    }
     // Add Save and Submit buttons to menu if student can edit
     if ( $can_edit ) {
         $menu->addRight(__('Save Draft'), '#', /* push */ false, 'id="menu-save-btn" style="cursor: pointer;"');
@@ -245,6 +259,18 @@ if ( U::strlen($inst_note) > 0 ) {
     display: block;
 }
 .ckeditor-container { min-height: 25em; }
+.ckeditor-display {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    padding: 15px;
+    min-height: 10em;
+}
+.ckeditor-display .ck-editor__editable {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
 .tsugi-nav-link.active {
     font-weight: bold;
     text-decoration: underline;
@@ -274,26 +300,39 @@ if ( U::strlen($inst_note) > 0 ) {
         <?php if ( $dueDate->message ) { ?>
             <p style="color:red;"><?= htmlentities($dueDate->message) ?></p>
         <?php } ?>
-        <p>Use the menu at the top to navigate between sections:</p>
-        <ul>
-            <li><strong>Main</strong> - This overview page</li>
-            <li><strong>Instructions</strong> - Read the assignment instructions and rubric</li>
-            <li><strong>Paper</strong> - Write and edit your paper submission</li>
-            <li><strong>AI Enhanced</strong> - Optionally add an AI-enhanced version of your submission</li>
-        </ul>
         <?php if ( $is_submitted ) { ?>
             <div class="alert alert-success" style="margin-top: 20px;">
                 <strong>Status:</strong> Your paper has been submitted.
             </div>
+            
+            <div style="margin-top: 30px;">
+                <h4>
+                    Your Paper
+                    <button type="button" class="btn btn-sm btn-default toggle-paper" data-target="paper-content" style="margin-left: 10px;">
+                        <span class="toggle-text">Show</span>
+                    </button>
+                </h4>
+                <div id="paper-content-wrapper" style="display: none; margin-top: 10px;">
+                    <div id="paper-content" class="ckeditor-display"></div>
+                </div>
+            </div>
+            
+            <?php if ( U::isNotEmpty($paper_row['ai_enhanced_submission'] ?? '') ) { ?>
+                <div style="margin-top: 30px;">
+                    <h4>
+                        Paper+AI
+                        <button type="button" class="btn btn-sm btn-default toggle-paper" data-target="ai-content" style="margin-left: 10px;">
+                            <span class="toggle-text">Show</span>
+                        </button>
+                    </h4>
+                    <div id="ai-content-wrapper" style="display: none; margin-top: 10px;">
+                        <div id="ai-content" class="ckeditor-display"></div>
+                    </div>
+                </div>
+            <?php } ?>
         <?php } else { ?>
             <div class="alert alert-info" style="margin-top: 20px;">
                 <strong>Status:</strong> Your paper has not been submitted yet. Use the Paper and AI Enhanced sections to write and submit your paper.
-            </div>
-        <?php } ?>
-        
-        <?php if ( $is_submitted && $resubmit_allowed ) { ?>
-            <div style="margin-top: 20px;">
-                <button type="button" class="btn btn-warning" id="reset-submission-btn">Reset Submission</button>
             </div>
         <?php } ?>
     </div>
@@ -411,6 +450,45 @@ $(document).ready( function () {
             $('#display_ai_enhanced').html(aiHtml);
         <?php } ?>
         
+        // Initialize readonly CKEditor for submitted papers
+        <?php if ( $is_submitted ) { ?>
+            var paperHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($paper_row['raw_submission'] ?? '') ?>);
+            ClassicEditor
+                .create( document.querySelector( '#paper-content' ), {
+                    ...ClassicEditor.defaultConfig,
+                    toolbar: { items: [] }, // No toolbar
+                    isReadOnly: true
+                } )
+                .then(editor => {
+                    editor.setData(paperHtml);
+                    editors['paper-display'] = editor;
+                })
+                .catch( error => {
+                    console.error( error );
+                    // Fallback to plain HTML if CKEditor fails
+                    $('#paper-content').html(paperHtml);
+                });
+            
+            <?php if ( U::isNotEmpty($paper_row['ai_enhanced_submission'] ?? '') ) { ?>
+                var aiHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($paper_row['ai_enhanced_submission'] ?? '') ?>);
+                ClassicEditor
+                    .create( document.querySelector( '#ai-content' ), {
+                        ...ClassicEditor.defaultConfig,
+                        toolbar: { items: [] }, // No toolbar
+                        isReadOnly: true
+                    } )
+                    .then(editor => {
+                        editor.setData(aiHtml);
+                        editors['ai-display'] = editor;
+                    })
+                    .catch( error => {
+                        console.error( error );
+                        // Fallback to plain HTML if CKEditor fails
+                        $('#ai-content').html(aiHtml);
+                    });
+            <?php } ?>
+        <?php } ?>
+        
         // Instructions display
         var instructionsHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($instructions ?? '') ?>);
         $('#display_instructions').html(instructionsHtml);
@@ -469,11 +547,27 @@ $(document).ready( function () {
             <?php } ?>
         });
         
-        // Handle Reset Submission button click
-        $('#reset-submission-btn').on('click', function(e) {
+        // Handle Reset Submission button click (from menu)
+        $('#menu-reset-btn').on('click', function(e) {
             e.preventDefault();
             if ( confirm('Are you sure you want to reset your submission? This will delete all your submission content, AI enhanced content, and all comments. This action cannot be undone.') ) {
                 $('#hidden-reset-btn').click();
+            }
+        });
+        
+        // Handle show/hide toggle for submitted papers
+        $('.toggle-paper').on('click', function(e) {
+            e.preventDefault();
+            var target = $(this).data('target');
+            var wrapper = $('#' + target + '-wrapper');
+            var toggleText = $(this).find('.toggle-text');
+            
+            if ( wrapper.is(':visible') ) {
+                wrapper.slideUp();
+                toggleText.text('Show');
+            } else {
+                wrapper.slideDown();
+                toggleText.text('Hide');
             }
         });
     <?php } ?>
