@@ -572,7 +572,7 @@ if ( U::strlen($inst_note) > 0 ) {
                             <?php } ?>
                         </div>
                         <div>
-                            <a href="review.php?result_id=<?= $sub['result_id'] ?>" class="btn btn-primary btn-sm">
+                            <a href="review.php?result_id=<?= $sub['result_id'] ?>&review_page=<?= $review_page ?>" class="btn btn-primary btn-sm">
                                 <?= $sub['comment_count'] > 0 ? 'Review Again' : 'Review' ?>
                             </a>
                         </div>

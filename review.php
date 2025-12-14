@@ -19,6 +19,9 @@ if ( !$review_result_id || !is_numeric($review_result_id) ) {
 }
 $review_result_id = intval($review_result_id);
 
+// Get review_page parameter to preserve it
+$review_page = U::get($_GET, 'review_page', '');
+
 // Verify current user has submitted their own paper (unless instructor)
 if ( !$USER->instructor ) {
     $my_result_id = $RESULT->id;
@@ -64,11 +67,18 @@ if ( !$USER->instructor && $review_result['user_id'] == $USER->id ) {
 
 // Handle comment submission
 if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
+    // Get review_page from POST (form) or GET (URL)
+    $review_page = U::get($_POST, 'review_page', U::get($_GET, 'review_page', ''));
+    
     $comment_text = U::get($_POST, 'comment_text', '');
     
     if ( U::isEmpty($comment_text) ) {
         $_SESSION['error'] = 'Comment cannot be blank';
-        header( 'Location: '.addSession('review.php?result_id='.$review_result_id) ) ;
+        $redirect_url = 'review.php?result_id='.$review_result_id;
+        if ( !empty($review_page) ) {
+            $redirect_url .= '&review_page=' . intval($review_page);
+        }
+        header( 'Location: '.addSession($redirect_url) ) ;
         return;
     }
     
@@ -88,7 +98,11 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
     );
     
     $_SESSION['success'] = 'Comment added successfully';
-    header( 'Location: '.addSession('review.php?result_id='.$review_result_id) ) ;
+    $redirect_url = 'review.php?result_id='.$review_result_id;
+    if ( !empty($review_page) ) {
+        $redirect_url .= '&review_page=' . intval($review_page);
+    }
+    header( 'Location: '.addSession($redirect_url) ) ;
     return;
 }
 
@@ -139,11 +153,17 @@ $author_name = $use_real_names && !empty($review_result['displayname'])
     ? $review_result['displayname'] 
     : FakeName::getName($review_result['user_id']);
 
+// review_page is already set above
+
 $menu = new \Tsugi\UI\MenuSet();
 if ( $USER->instructor ) {
     $menu->addLeft(__('Back to Grades'), 'grades.php');
 } else {
-    $menu->addLeft(__('Back'), 'index.php');
+    $back_url = 'index.php';
+    if ( !empty($review_page) ) {
+        $back_url .= '?review_page=' . intval($review_page);
+    }
+    $menu->addLeft(__('Back'), $back_url);
 }
 
 // Render view
@@ -239,6 +259,9 @@ $OUTPUT->welcomeUserCourse();
     <div style="margin-top: 30px;">
         <h4>Add Your Comment</h4>
         <form method="post">
+            <?php if ( !empty($review_page) ) { ?>
+                <input type="hidden" name="review_page" value="<?= intval($review_page) ?>">
+            <?php } ?>
             <div class="ckeditor-container">
                 <textarea name="comment_text" id="editor_comment"></textarea>
             </div>
