@@ -52,11 +52,12 @@ if ( $instructor_points > 0 && $old_grade > 0 ) {
 }
 
 $gradeurl = Table::makeUrl('grade-detail.php', $getparms);
-// Build grades URL preserving pagination/sort params but excluding user_id
+// Build grades URL preserving pagination/sort/search params but excluding user_id
 $grades_params = array();
 if (isset($_GET['page'])) $grades_params['page'] = intval($_GET['page']);
 if (isset($_GET['sort'])) $grades_params['sort'] = U::get($_GET, 'sort');
 if (isset($_GET['dir'])) $grades_params['dir'] = U::get($_GET, 'dir');
+if (isset($_GET['search']) && !empty($_GET['search'])) $grades_params['search'] = U::get($_GET, 'search');
 $gradesurl = Table::makeUrl('grades.php', $grades_params);
 
 // Handle reset submission
@@ -293,16 +294,17 @@ if ( $result_row ) {
     }
     
     if ( $paper_row && ($paper_row['submitted'] == 1 || $paper_row['submitted'] == true) ) {
-        // Preserve pagination and sorting when linking to review.php
+        // Preserve pagination, sorting, and search when linking to review.php
         $review_params = array(
             'result_id' => $result_id,
             'from' => 'grade-detail',
             'user_id' => $user_id
         );
-        // Add pagination/sort params if they exist
+        // Add pagination/sort/search params if they exist
         if (isset($_GET['page'])) $review_params['page'] = intval($_GET['page']);
         if (isset($_GET['sort'])) $review_params['sort'] = U::get($_GET, 'sort');
         if (isset($_GET['dir'])) $review_params['dir'] = U::get($_GET, 'dir');
+        if (isset($_GET['search']) && !empty($_GET['search'])) $review_params['search'] = U::get($_GET, 'search');
         $review_url = 'review.php?' . http_build_query($review_params);
         echo('<p><a href="'.$review_url.'" class="btn btn-primary">');
         echo(__('Review Submission'));

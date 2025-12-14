@@ -22,6 +22,9 @@ $OUTPUT->flashMessages();
 $p = $CFG->dbprefix;
 $link_id = $LAUNCH->link->id;
 
+// Get search parameter
+$search_term = trim(U::get($_GET, 'search', ''));
+
 // Get pagination and sorting parameters
 $page = max(1, intval(U::get($_GET, 'page', 1)));
 $sort_col = U::get($_GET, 'sort', '');
@@ -64,13 +67,21 @@ if ($sort_col == 'displayname') {
     $order_by = $sort_sql . ' ' . $sort_dir_sql . ', u.displayname ASC';
 }
 
+// Build search WHERE clause
+$search_where = '';
+$search_params = array(':LID' => $link_id);
+if ( !empty($search_term) ) {
+    $search_where = " AND (u.displayname LIKE :SEARCH OR u.email LIKE :SEARCH)";
+    $search_params[':SEARCH'] = '%' . $search_term . '%';
+}
+
 // Get total count for pagination (single query)
 $total_rows = $PDOX->rowDie(
     "SELECT COUNT(*) as cnt
      FROM {$p}lti_result lr
      JOIN {$p}lti_user u ON lr.user_id = u.user_id
-     WHERE lr.link_id = :LID",
-    array(':LID' => $link_id)
+     WHERE lr.link_id = :LID" . $search_where,
+    $search_params
 );
 $total_rows = intval($total_rows['cnt']);
 $total_pages = ceil($total_rows / $per_page);
@@ -117,10 +128,10 @@ $rows = $PDOX->allRowsDie(
          WHERE user_id IS NOT NULL AND deleted = 1
          GROUP BY user_id
      ) dc ON dc.user_id = lr.user_id
-     WHERE lr.link_id = :LID
+     WHERE lr.link_id = :LID" . $search_where . "
      ORDER BY $order_by
      LIMIT " . intval($per_page) . " OFFSET " . intval($offset),
-    array(':LID' => $link_id)
+    $search_params
 );
 
 // Build sort URL helper
@@ -133,6 +144,10 @@ function buildSortUrl($col, $current_sort, $current_dir) {
         $params['dir'] = 'asc';
     }
     $params['page'] = 1; // Reset to page 1 when sorting
+    // Preserve search term if present
+    if ( isset($params['search']) && empty($params['search']) ) {
+        unset($params['search']);
+    }
     return addSession('grades.php?' . http_build_query($params));
 }
 
@@ -155,6 +170,32 @@ function renderSortHeader($label, $col, $current_sort, $current_dir) {
 
 // Build and render the table
 echo '<h2>Student Data</h2>';
+
+// Search form
+echo '<form method="get" action="' . addSession('grades.php') . '" style="margin-bottom: 20px;">';
+echo '<div class="form-inline">';
+echo '<div class="form-group">';
+echo '<label for="search" class="sr-only">Search</label>';
+echo '<input type="text" class="form-control" id="search" name="search" placeholder="Search by name or email" value="' . htmlentities($search_term) . '" style="width: 300px;">';
+// Preserve sort parameters
+if ( !empty($sort_col) ) {
+    echo '<input type="hidden" name="sort" value="' . htmlentities($sort_col) . '">';
+}
+if ( !empty($sort_dir) ) {
+    echo '<input type="hidden" name="dir" value="' . htmlentities($sort_dir) . '">';
+}
+echo '</div>';
+echo '<button type="submit" class="btn btn-primary" style="margin-left: 10px;">Search</button>';
+if ( !empty($search_term) ) {
+    echo '<a href="' . addSession('grades.php') . '" class="btn btn-default" style="margin-left: 10px;">Clear</a>';
+}
+echo '</div>';
+echo '</form>';
+
+if ( !empty($search_term) ) {
+    echo '<p class="text-muted">Found ' . $total_rows . ' student' . ($total_rows == 1 ? '' : 's') . ' matching "' . htmlentities($search_term) . '"</p>';
+}
+
 echo '<table class="table table-striped">';
 echo '<thead><tr>';
 echo '<th>' . renderSortHeader('Name', 'displayname', $sort_col, $sort_dir) . '</th>';
@@ -199,13 +240,16 @@ foreach ($rows as $row) {
     $flags_val = intval($row['flags']);
     $deleted_comments_val = intval($row['deleted_comments']);
     
-    // Preserve pagination and sorting when linking to detail page
+    // Preserve pagination, sorting, and search when linking to detail page
     $detail_params = array(
         'user_id' => $user_id,
         'page' => $page,
         'sort' => $sort_col,
         'dir' => $sort_dir
     );
+    if ( !empty($search_term) ) {
+        $detail_params['search'] = $search_term;
+    }
     $detail_url = addSession('grade-detail.php?' . http_build_query($detail_params));
     
     echo '<tr>';
