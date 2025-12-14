@@ -243,6 +243,7 @@ if ( $is_submitted ) {
     $deleted_filter = $USER->instructor ? '' : 'AND c.deleted = 0';
     $comment_rows = $PDOX->allRowsDie(
         "SELECT c.comment_id, c.comment_text, c.comment_type, c.created_at, c.user_id, c.deleted,
+                c.flagged, c.flagged_by,
                 u.displayname, u.email
          FROM {$p}aipaper_comment c
          LEFT JOIN {$p}lti_user u ON c.user_id = u.user_id
@@ -258,7 +259,8 @@ if ( $is_submitted ) {
             'comment_type' => $comment_row['comment_type'],
             'created_at' => $comment_row['created_at'],
             'user_id' => $comment_row['user_id'],
-            'deleted' => isset($comment_row['deleted']) && ($comment_row['deleted'] == 1 || $comment_row['deleted'] == true)
+            'deleted' => isset($comment_row['deleted']) && ($comment_row['deleted'] == 1 || $comment_row['deleted'] == true),
+            'flagged' => isset($comment_row['flagged']) && ($comment_row['flagged'] == 1 || $comment_row['flagged'] == true)
         );
         
         // Get display name based on comment type and settings
@@ -304,6 +306,42 @@ if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor )
             array(':DELETED' => $new_deleted, ':CID' => $comment_id)
         );
         $_SESSION['success'] = $new_deleted ? 'Comment hidden' : 'Comment shown';
+    } else {
+        $_SESSION['error'] = 'Comment not found';
+    }
+    
+    header( 'Location: '.addSession('index.php') ) ;
+    return;
+}
+
+// Handle toggle flag (anyone can flag and unflag)
+if ( count($_POST) > 0 && isset($_POST['toggle_flag']) ) {
+    $comment_id = intval($_POST['toggle_flag']);
+    $new_flagged = intval($_POST['comment_flagged']);
+    
+    // Verify comment exists and belongs to this link
+    $comment_check = $PDOX->rowDie(
+        "SELECT c.comment_id, c.flagged, c.flagged_by
+         FROM {$p}aipaper_comment c
+         INNER JOIN {$p}lti_result r ON c.result_id = r.result_id
+         WHERE c.comment_id = :CID AND r.link_id = :LID",
+        array(':CID' => $comment_id, ':LID' => $LAUNCH->link->id)
+    );
+    
+    if ( $comment_check ) {
+        // Anyone can flag and unflag
+        $flagged_by = $new_flagged == 1 ? $USER->id : null;
+        $PDOX->queryDie(
+            "UPDATE {$p}aipaper_comment 
+             SET flagged = :FLAGGED, flagged_by = :FLAGGED_BY, updated_at = NOW()
+             WHERE comment_id = :CID",
+            array(
+                ':FLAGGED' => $new_flagged,
+                ':FLAGGED_BY' => $flagged_by,
+                ':CID' => $comment_id
+            )
+        );
+        // No flash message - visual feedback (icon color change) is sufficient
     } else {
         $_SESSION['error'] = 'Comment not found';
     }
@@ -668,14 +706,35 @@ if ( U::strlen($inst_note) > 0 ) {
                                         <span class="label label-warning" style="margin-left: 10px;">Soft Deleted</span>
                                     <?php } ?>
                                     <?php if ( $USER->instructor ) { ?>
-                                        <form method="post" style="display: inline;" onsubmit="return confirm('<?= isset($comment['deleted']) && $comment['deleted'] ? 'Un-hide' : 'Hide' ?> this comment?');">
+                                        <?php 
+                                        $trash_color = isset($comment['deleted']) && $comment['deleted'] ? '#d9534f' : '#999';
+                                        $trash_size = isset($comment['deleted']) && $comment['deleted'] ? '18px' : '16px';
+                                        $trash_style = isset($comment['deleted']) && $comment['deleted'] ? 'font-weight: bold; border: 1px solid #d9534f; border-radius: 3px; padding: 2px;' : '';
+                                        $trash_alt = isset($comment['deleted']) && $comment['deleted'] ? 'Comment is hidden (click to show)' : 'Comment is visible (click to hide)';
+                                        ?>
+                                        <form method="post" style="display: inline;" onsubmit="return confirm('<?= isset($comment['deleted']) && $comment['deleted'] ? 'Show' : 'Hide' ?> this comment?');">
                                             <input type="hidden" name="toggle_comment" value="<?= $comment['comment_id'] ?>">
                                             <input type="hidden" name="comment_deleted" value="<?= isset($comment['deleted']) && $comment['deleted'] ? '0' : '1' ?>">
-                                            <button type="submit" class="btn btn-xs btn-default" style="margin-left: 10px;">
-                                                <?= isset($comment['deleted']) && $comment['deleted'] ? 'Show' : 'Hide' ?>
+                                            <button type="submit" class="btn btn-xs" style="background: none; border: none; padding: 0; margin: 0 5px;" aria-label="<?= htmlentities($trash_alt) ?>" title="<?= htmlentities($trash_alt) ?>">
+                                                <span class="glyphicon glyphicon-trash" style="color: <?= $trash_color ?>; font-size: <?= $trash_size ?>; <?= $trash_style ?>"></span>
                                             </button>
                                         </form>
                                     <?php } ?>
+                                    <!-- Flag/unflag button (anyone can flag and unflag) -->
+                                    <?php 
+                                    $is_flagged = isset($comment['flagged']) && $comment['flagged'];
+                                    $flag_color = $is_flagged ? '#d9534f' : '#999';
+                                    $flag_size = $is_flagged ? '18px' : '16px';
+                                    $flag_style = $is_flagged ? 'font-weight: bold; border: 1px solid #d9534f; border-radius: 3px; padding: 2px;' : '';
+                                    $flag_alt = $is_flagged ? 'Comment is flagged (click to unflag)' : 'Comment is not flagged (click to flag)';
+                                    ?>
+                                    <form method="post" style="display: inline;" onsubmit="return confirm('<?= $is_flagged ? 'Unflag' : 'Flag' ?> this comment?');">
+                                        <input type="hidden" name="toggle_flag" value="<?= $comment['comment_id'] ?>">
+                                        <input type="hidden" name="comment_flagged" value="<?= $is_flagged ? '0' : '1' ?>">
+                                        <button type="submit" class="btn btn-xs" style="background: none; border: none; padding: 0; margin: 0 5px;" aria-label="<?= htmlentities($flag_alt) ?>" title="<?= htmlentities($flag_alt) ?>">
+                                            <span class="glyphicon glyphicon-flag" style="color: <?= $flag_color ?>; font-size: <?= $flag_size ?>; <?= $flag_style ?>"></span>
+                                        </button>
+                                    </form>
                                 </div>
                                 <div class="comment-text" style="line-height: 1.6;">
                                     <div class="comment-html-<?= $comment['comment_id'] ?>"></div>
