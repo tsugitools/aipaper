@@ -135,8 +135,16 @@ if ( $is_submitted && !$USER->instructor ) {
         }
     }
     
-    // Sort by oldest submission first, then by comment count (fewer comments first)
+    // Sort: submissions where current user has >= 1 comment first, then by oldest submission, then by comment count
     usort($submissions_with_counts, function($a, $b) {
+        // Prioritize submissions where current user has made >= 1 comment
+        $a_has_comments = $a['comment_count'] >= 1;
+        $b_has_comments = $b['comment_count'] >= 1;
+        
+        if ( $a_has_comments && !$b_has_comments ) return -1;
+        if ( !$a_has_comments && $b_has_comments ) return 1;
+        
+        // If both have comments or both don't, sort by oldest submission first, then by comment count
         $date_cmp = strcmp($a['submission_date'], $b['submission_date']);
         if ( $date_cmp != 0 ) return $date_cmp;
         return $a['comment_count'] - $b['comment_count'];
