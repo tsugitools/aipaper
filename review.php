@@ -32,6 +32,7 @@ $grades_page = U::get($_GET, 'page', '');
 $grades_sort = U::get($_GET, 'sort', '');
 $grades_dir = U::get($_GET, 'dir', '');
 $grades_search = U::get($_GET, 'search', '');
+$grades_fake_name_search = U::get($_GET, 'fake_name_search', '');
 
 // Verify current user has submitted their own paper (unless instructor)
 if ( !$USER->instructor ) {
@@ -87,6 +88,7 @@ if ( count($_POST) > 0 && isset($_POST['toggle_submission_flag']) ) {
     $grades_sort = U::get($_POST, 'sort', U::get($_GET, 'sort', ''));
     $grades_dir = U::get($_POST, 'dir', U::get($_GET, 'dir', ''));
     $grades_search = U::get($_POST, 'search', U::get($_GET, 'search', ''));
+    $grades_fake_name_search = U::get($_POST, 'fake_name_search', U::get($_GET, 'fake_name_search', ''));
     
     $new_flagged = intval($_POST['submission_flagged']);
     
@@ -133,6 +135,7 @@ if ( count($_POST) > 0 && isset($_POST['toggle_submission_flag']) ) {
         if ( !empty($grades_sort) ) $redirect_params['sort'] = $grades_sort;
         if ( !empty($grades_dir) ) $redirect_params['dir'] = $grades_dir;
         if ( !empty($grades_search) ) $redirect_params['search'] = $grades_search;
+        if ( !empty($grades_fake_name_search) ) $redirect_params['fake_name_search'] = $grades_fake_name_search;
     }
     header( 'Location: '.addSession('review.php?' . http_build_query($redirect_params)) ) ;
     return;
@@ -151,6 +154,7 @@ if ( count($_POST) > 0 && isset($_POST['toggle_flag']) ) {
     $grades_sort = U::get($_POST, 'sort', U::get($_GET, 'sort', ''));
     $grades_dir = U::get($_POST, 'dir', U::get($_GET, 'dir', ''));
     $grades_search = U::get($_POST, 'search', U::get($_GET, 'search', ''));
+    $grades_fake_name_search = U::get($_POST, 'fake_name_search', U::get($_GET, 'fake_name_search', ''));
     
     // Verify comment exists and belongs to this link
     $comment_check = $PDOX->rowDie(
@@ -195,6 +199,7 @@ if ( count($_POST) > 0 && isset($_POST['toggle_flag']) ) {
         if ( !empty($grades_sort) ) $redirect_params['sort'] = $grades_sort;
         if ( !empty($grades_dir) ) $redirect_params['dir'] = $grades_dir;
         if ( !empty($grades_search) ) $redirect_params['search'] = $grades_search;
+        if ( !empty($grades_fake_name_search) ) $redirect_params['fake_name_search'] = $grades_fake_name_search;
     }
     header( 'Location: '.addSession('review.php?' . http_build_query($redirect_params)) ) ;
     return;
@@ -213,6 +218,7 @@ if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor )
     $grades_sort = U::get($_POST, 'sort', U::get($_GET, 'sort', ''));
     $grades_dir = U::get($_POST, 'dir', U::get($_GET, 'dir', ''));
     $grades_search = U::get($_POST, 'search', U::get($_GET, 'search', ''));
+    $grades_fake_name_search = U::get($_POST, 'fake_name_search', U::get($_GET, 'fake_name_search', ''));
     
     // Verify comment exists and belongs to this link
     $comment_check = $PDOX->rowDie(
@@ -248,6 +254,7 @@ if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor )
         if ( !empty($grades_sort) ) $redirect_params['sort'] = $grades_sort;
         if ( !empty($grades_dir) ) $redirect_params['dir'] = $grades_dir;
         if ( !empty($grades_search) ) $redirect_params['search'] = $grades_search;
+        if ( !empty($grades_fake_name_search) ) $redirect_params['fake_name_search'] = $grades_fake_name_search;
     }
     header( 'Location: '.addSession('review.php?' . http_build_query($redirect_params)) ) ;
     return;
@@ -265,6 +272,7 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
     $grades_sort = U::get($_POST, 'sort', U::get($_GET, 'sort', ''));
     $grades_dir = U::get($_POST, 'dir', U::get($_GET, 'dir', ''));
     $grades_search = U::get($_POST, 'search', U::get($_GET, 'search', ''));
+    $grades_fake_name_search = U::get($_POST, 'fake_name_search', U::get($_GET, 'fake_name_search', ''));
     
     $comment_text = U::get($_POST, 'comment_text', '');
     
@@ -321,6 +329,7 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
         if ( !empty($grades_sort) ) $redirect_params['sort'] = $grades_sort;
         if ( !empty($grades_dir) ) $redirect_params['dir'] = $grades_dir;
         if ( !empty($grades_search) ) $redirect_params['search'] = $grades_search;
+        if ( !empty($grades_fake_name_search) ) $redirect_params['fake_name_search'] = $grades_fake_name_search;
         header( 'Location: '.addSession('grade-detail.php?' . http_build_query($redirect_params)) ) ;
         return;
     }
@@ -421,11 +430,13 @@ if ( $USER->instructor ) {
         if ( !empty($grades_sort) ) $back_params['sort'] = $grades_sort;
         if ( !empty($grades_dir) ) $back_params['dir'] = $grades_dir;
         if ( !empty($grades_search) ) $back_params['search'] = $grades_search;
+        if ( !empty($grades_fake_name_search) ) $back_params['fake_name_search'] = $grades_fake_name_search;
         $menu->addLeft(__('Back'), 'grade-detail.php?' . http_build_query($back_params));
     } else {
         // Preserve search when going back to grades.php
         $back_params = array();
         if ( !empty($grades_search) ) $back_params['search'] = $grades_search;
+        if ( !empty($grades_fake_name_search) ) $back_params['fake_name_search'] = $grades_fake_name_search;
         $back_url = 'grades.php';
         if ( !empty($back_params) ) {
             $back_url .= '?' . http_build_query($back_params);
@@ -507,6 +518,9 @@ $OUTPUT->welcomeUserCourse();
                     <?php if ( !empty($grades_search) ) { ?>
                         <input type="hidden" name="search" value="<?= htmlentities($grades_search) ?>">
                     <?php } ?>
+                    <?php if ( !empty($grades_fake_name_search) ) { ?>
+                        <input type="hidden" name="fake_name_search" value="<?= htmlentities($grades_fake_name_search) ?>">
+                    <?php } ?>
                 <?php } ?>
                 <button type="submit" class="btn btn-xs" style="background: none; border: none; padding: 0; margin: 0 5px;" aria-label="<?= htmlentities($flag_alt) ?>" title="<?= htmlentities($flag_alt) ?>">
                     <span class="glyphicon glyphicon-flag" style="color: <?= $flag_color ?>; font-size: <?= $flag_size ?>; <?= $flag_style ?>"></span>
@@ -584,6 +598,12 @@ $OUTPUT->welcomeUserCourse();
                                         <?php if ( !empty($grades_dir) ) { ?>
                                             <input type="hidden" name="dir" value="<?= htmlentities($grades_dir) ?>">
                                         <?php } ?>
+                                        <?php if ( !empty($grades_search) ) { ?>
+                                            <input type="hidden" name="search" value="<?= htmlentities($grades_search) ?>">
+                                        <?php } ?>
+                                        <?php if ( !empty($grades_fake_name_search) ) { ?>
+                                            <input type="hidden" name="fake_name_search" value="<?= htmlentities($grades_fake_name_search) ?>">
+                                        <?php } ?>
                                     <?php } ?>
                                     <button type="submit" class="btn btn-xs" style="background: none; border: none; padding: 0; margin: 0 5px;" aria-label="<?= htmlentities($trash_alt) ?>" title="<?= htmlentities($trash_alt) ?>">
                                         <span class="glyphicon glyphicon-trash" style="color: <?= $trash_color ?>; font-size: <?= $trash_size ?>; <?= $trash_style ?>"></span>
@@ -616,6 +636,12 @@ $OUTPUT->welcomeUserCourse();
                                         <?php } ?>
                                         <?php if ( !empty($grades_dir) ) { ?>
                                             <input type="hidden" name="dir" value="<?= htmlentities($grades_dir) ?>">
+                                        <?php } ?>
+                                        <?php if ( !empty($grades_search) ) { ?>
+                                            <input type="hidden" name="search" value="<?= htmlentities($grades_search) ?>">
+                                        <?php } ?>
+                                        <?php if ( !empty($grades_fake_name_search) ) { ?>
+                                            <input type="hidden" name="fake_name_search" value="<?= htmlentities($grades_fake_name_search) ?>">
                                         <?php } ?>
                                     <?php } ?>
                                     <button type="submit" class="btn btn-xs" style="background: none; border: none; padding: 0; margin: 0 5px;" aria-label="<?= htmlentities($flag_alt) ?>" title="<?= htmlentities($flag_alt) ?>">
@@ -650,6 +676,12 @@ $OUTPUT->welcomeUserCourse();
                 <?php } ?>
                 <?php if ( !empty($grades_dir) ) { ?>
                     <input type="hidden" name="dir" value="<?= htmlentities($grades_dir) ?>">
+                <?php } ?>
+                <?php if ( !empty($grades_search) ) { ?>
+                    <input type="hidden" name="search" value="<?= htmlentities($grades_search) ?>">
+                <?php } ?>
+                <?php if ( !empty($grades_fake_name_search) ) { ?>
+                    <input type="hidden" name="fake_name_search" value="<?= htmlentities($grades_fake_name_search) ?>">
                 <?php } ?>
             <?php } ?>
             <div class="ckeditor-container">

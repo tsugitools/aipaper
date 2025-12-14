@@ -58,6 +58,7 @@ if (isset($_GET['page'])) $grades_params['page'] = intval($_GET['page']);
 if (isset($_GET['sort'])) $grades_params['sort'] = U::get($_GET, 'sort');
 if (isset($_GET['dir'])) $grades_params['dir'] = U::get($_GET, 'dir');
 if (isset($_GET['search']) && !empty($_GET['search'])) $grades_params['search'] = U::get($_GET, 'search');
+if (isset($_GET['fake_name_search']) && !empty($_GET['fake_name_search'])) $grades_params['fake_name_search'] = U::get($_GET, 'fake_name_search');
 $gradesurl = Table::makeUrl('grades.php', $grades_params);
 
 // Handle reset submission
@@ -305,6 +306,7 @@ if ( $result_row ) {
         if (isset($_GET['sort'])) $review_params['sort'] = U::get($_GET, 'sort');
         if (isset($_GET['dir'])) $review_params['dir'] = U::get($_GET, 'dir');
         if (isset($_GET['search']) && !empty($_GET['search'])) $review_params['search'] = U::get($_GET, 'search');
+        if (isset($_GET['fake_name_search']) && !empty($_GET['fake_name_search'])) $review_params['fake_name_search'] = U::get($_GET, 'fake_name_search');
         $review_url = 'review.php?' . http_build_query($review_params);
         echo('<p><a href="'.$review_url.'" class="btn btn-primary">');
         echo(__('Review Submission'));

@@ -22,8 +22,54 @@ $OUTPUT->flashMessages();
 $p = $CFG->dbprefix;
 $link_id = $LAUNCH->link->id;
 
-// Get search parameter
-$search_term = trim(U::get($_GET, 'search', ''));
+// Get search parameters - mutually exclusive
+// If regular_search button was clicked, clear fake_name_search
+// If fake_search button was clicked, clear search
+$search_term = '';
+$fake_name_search = '';
+if ( isset($_GET['regular_search']) || (isset($_GET['search']) && !isset($_GET['fake_search'])) ) {
+    $search_term = trim(U::get($_GET, 'search', ''));
+    $fake_name_search = ''; // Clear fake name search
+} elseif ( isset($_GET['fake_search']) || (isset($_GET['fake_name_search']) && !isset($_GET['regular_search'])) ) {
+    $fake_name_search = trim(U::get($_GET, 'fake_name_search', ''));
+    $search_term = ''; // Clear regular search
+} else {
+    // Fallback: get both but they should be mutually exclusive
+    $search_term = trim(U::get($_GET, 'search', ''));
+    $fake_name_search = trim(U::get($_GET, 'fake_name_search', ''));
+    // If both are set, prefer the one that was actually searched
+    if ( !empty($search_term) && !empty($fake_name_search) ) {
+        // If both are present, clear the one that wasn't actively searched
+        // This shouldn't happen with the onclick handlers, but just in case
+        $fake_name_search = '';
+    }
+}
+
+// Handle fake name search - collect matching user_ids
+$fake_name_user_ids = array();
+if ( !empty($fake_name_search) ) {
+    // Query all users for this link (one SQL query, iterator-based)
+    $all_users = $PDOX->allRowsDie(
+        "SELECT lr.user_id, u.displayname, u.email
+         FROM {$p}lti_result lr
+         JOIN {$p}lti_user u ON lr.user_id = u.user_id
+         WHERE lr.link_id = :LID
+         ORDER BY u.displayname",
+        array(':LID' => $link_id)
+    );
+    
+    // Iterate through results, generate fake names, and filter matches
+    // This processes as we iterate, not loading everything into memory
+    foreach ( $all_users as $user_row ) {
+        $user_id = intval($user_row['user_id']);
+        $fake_name = FakeName::getName($user_id);
+        
+        // Case-insensitive partial match
+        if ( stripos($fake_name, $fake_name_search) !== false ) {
+            $fake_name_user_ids[] = $user_id;
+        }
+    }
+}
 
 // Get pagination and sorting parameters
 $page = max(1, intval(U::get($_GET, 'page', 1)));
@@ -61,7 +107,10 @@ $sort_sql = isset($sort_sql_map[$sort_col]) ? $sort_sql_map[$sort_col] : 'COALES
 $sort_dir_sql = ($sort_dir == 'desc') ? 'DESC' : 'ASC';
 
 // Build ORDER BY clause: primary sort, then displayname as secondary (except when already sorting by displayname)
-if ($sort_col == 'displayname') {
+// When fake name search is active, disable sorting and use simple displayname order
+if ( !empty($fake_name_search) ) {
+    $order_by = 'u.displayname ASC';
+} elseif ($sort_col == 'displayname') {
     $order_by = $sort_sql . ' ' . $sort_dir_sql;
 } else {
     $order_by = $sort_sql . ' ' . $sort_dir_sql . ', u.displayname ASC';
@@ -73,6 +122,19 @@ $search_params = array(':LID' => $link_id);
 if ( !empty($search_term) ) {
     $search_where = " AND (u.displayname LIKE :SEARCH OR u.email LIKE :SEARCH)";
     $search_params[':SEARCH'] = '%' . $search_term . '%';
+}
+// If fake name search is active, filter by matching user_ids
+if ( !empty($fake_name_search) && count($fake_name_user_ids) > 0 ) {
+    $placeholders = array();
+    foreach ( $fake_name_user_ids as $idx => $uid ) {
+        $key = ':FAKE_UID' . $idx;
+        $placeholders[] = $key;
+        $search_params[$key] = $uid;
+    }
+    $search_where .= " AND lr.user_id IN (" . implode(',', $placeholders) . ")";
+} elseif ( !empty($fake_name_search) && count($fake_name_user_ids) == 0 ) {
+    // No matches - return empty result set
+    $search_where .= " AND 1=0";
 }
 
 // Get total count for pagination (single query)
@@ -158,8 +220,12 @@ function buildPageUrl($page_num) {
     return addSession('grades.php?' . http_build_query($params));
 }
 
-// Render sortable header
-function renderSortHeader($label, $col, $current_sort, $current_dir) {
+// Render sortable header (disabled when fake name search is active)
+function renderSortHeader($label, $col, $current_sort, $current_dir, $disable_sort = false) {
+    if ( $disable_sort ) {
+        // Just show the label without link or arrow
+        return htmlentities($label);
+    }
     $url = buildSortUrl($col, $current_sort, $current_dir);
     $arrow = '';
     if ($current_sort == $col) {
@@ -168,15 +234,29 @@ function renderSortHeader($label, $col, $current_sort, $current_dir) {
     return '<a href="' . htmlentities($url) . '">' . htmlentities($label) . $arrow . '</a>';
 }
 
+// Get userealnames setting (used for display and to determine if fake name search should be shown)
+$use_real_names = Settings::linkGet('userealnames', false);
+
 // Build and render the table
 echo '<h2>Student Data</h2>';
 
-// Search form
-echo '<form method="get" action="' . addSession('grades.php') . '" style="margin-bottom: 20px;">';
+// Search form with two separate search sections
+echo '<form method="get" action="' . addSession('grades.php') . '" id="searchForm" style="margin-bottom: 20px;">';
 echo '<div class="form-inline">';
+// Regular search box with button
 echo '<div class="form-group">';
 echo '<label for="search" class="sr-only">Search</label>';
 echo '<input type="text" class="form-control" id="search" name="search" placeholder="Search by name or email" value="' . htmlentities($search_term) . '" style="width: 300px;">';
+echo '<button type="submit" class="btn btn-primary" name="regular_search" style="margin-left: 5px;" onclick="document.getElementById(\'fake_name_search\').value = \'\';">Search</button>';
+echo '</div>';
+// Fake name search (only shown if userealnames is false)
+if ( !$use_real_names ) {
+    echo '<div class="form-group" style="margin-left: 15px;">';
+    echo '<label for="fake_name_search" class="sr-only">Search by Fake Name</label>';
+    echo '<input type="text" class="form-control" id="fake_name_search" name="fake_name_search" placeholder="Search by fake name" value="' . htmlentities($fake_name_search) . '" style="width: 300px;">';
+    echo '<button type="submit" name="fake_search" class="btn btn-info" style="margin-left: 5px;" onclick="document.getElementById(\'search\').value = \'\';">Search by Fake Name</button>';
+    echo '</div>';
+}
 // Preserve sort parameters
 if ( !empty($sort_col) ) {
     echo '<input type="hidden" name="sort" value="' . htmlentities($sort_col) . '">';
@@ -184,33 +264,41 @@ if ( !empty($sort_col) ) {
 if ( !empty($sort_dir) ) {
     echo '<input type="hidden" name="dir" value="' . htmlentities($sort_dir) . '">';
 }
-echo '</div>';
-echo '<button type="submit" class="btn btn-primary" style="margin-left: 10px;">Search</button>';
-if ( !empty($search_term) ) {
-    echo '<a href="' . addSession('grades.php') . '" class="btn btn-default" style="margin-left: 10px;">Clear</a>';
+if ( !empty($search_term) || !empty($fake_name_search) ) {
+    echo '<a href="' . addSession('grades.php') . '" class="btn btn-default" style="margin-left: 15px;">Clear</a>';
 }
 echo '</div>';
 echo '</form>';
 
+// Display search results
 if ( !empty($search_term) ) {
     echo '<p class="text-muted">Found ' . $total_rows . ' student' . ($total_rows == 1 ? '' : 's') . ' matching "' . htmlentities($search_term) . '"</p>';
 }
+if ( !empty($fake_name_search) ) {
+    if ( count($fake_name_user_ids) > 0 ) {
+        echo '<p class="text-muted">Found ' . $total_rows . ' student' . ($total_rows == 1 ? '' : 's') . ' matching fake name "' . htmlentities($fake_name_search) . '" (sorting disabled)</p>';
+    } else {
+        echo '<div class="alert alert-warning" style="margin-bottom: 20px;">';
+        echo 'No matches found for fake name "' . htmlentities($fake_name_search) . '"';
+        echo '</div>';
+    }
+}
+
+// Disable sorting when fake name search is active
+$disable_sort = !empty($fake_name_search);
 
 echo '<table class="table table-striped">';
 echo '<thead><tr>';
-echo '<th>' . renderSortHeader('Name', 'displayname', $sort_col, $sort_dir) . '</th>';
-echo '<th>' . renderSortHeader('Email', 'email', $sort_col, $sort_dir) . '</th>';
-echo '<th>' . renderSortHeader('Grade', 'grade', $sort_col, $sort_dir) . '</th>';
-echo '<th>' . renderSortHeader('Updated', 'updated_at', $sort_col, $sort_dir) . '</th>';
-echo '<th>' . renderSortHeader('Comments Given', 'comments_given', $sort_col, $sort_dir) . '</th>';
-echo '<th>' . renderSortHeader('Comments Received', 'comments_received', $sort_col, $sort_dir) . '</th>';
-echo '<th>' . renderSortHeader('Flags', 'flags', $sort_col, $sort_dir) . '</th>';
-echo '<th>' . renderSortHeader('Deleted Comments', 'deleted_comments', $sort_col, $sort_dir) . '</th>';
+echo '<th>' . renderSortHeader('Name', 'displayname', $sort_col, $sort_dir, $disable_sort) . '</th>';
+echo '<th>' . renderSortHeader('Email', 'email', $sort_col, $sort_dir, $disable_sort) . '</th>';
+echo '<th>' . renderSortHeader('Grade', 'grade', $sort_col, $sort_dir, $disable_sort) . '</th>';
+echo '<th>' . renderSortHeader('Updated', 'updated_at', $sort_col, $sort_dir, $disable_sort) . '</th>';
+echo '<th>' . renderSortHeader('Comments Given', 'comments_given', $sort_col, $sort_dir, $disable_sort) . '</th>';
+echo '<th>' . renderSortHeader('Comments Received', 'comments_received', $sort_col, $sort_dir, $disable_sort) . '</th>';
+echo '<th>' . renderSortHeader('Flags', 'flags', $sort_col, $sort_dir, $disable_sort) . '</th>';
+echo '<th>' . renderSortHeader('Deleted Comments', 'deleted_comments', $sort_col, $sort_dir, $disable_sort) . '</th>';
 echo '</tr></thead>';
 echo '<tbody>';
-
-// Get userealnames setting
-$use_real_names = Settings::linkGet('userealnames', false);
 
 foreach ($rows as $row) {
     $user_id = intval($row['user_id']);
@@ -249,6 +337,9 @@ foreach ($rows as $row) {
     );
     if ( !empty($search_term) ) {
         $detail_params['search'] = $search_term;
+    }
+    if ( !empty($fake_name_search) ) {
+        $detail_params['fake_name_search'] = $fake_name_search;
     }
     $detail_url = addSession('grade-detail.php?' . http_build_query($detail_params));
     
