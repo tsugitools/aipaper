@@ -472,6 +472,23 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         )
     );
     
+    // Set success message first (before AI processing)
+    if ( $USER->instructor ) {
+        $_SESSION['success'] = 'Instructions updated';
+    } else {
+        if ( $is_submit ) {
+            $success_msg = 'Paper submitted';
+            if ( $resubmit_allowed ) {
+                $success_msg .= '. You can reset your submission from the Main page if you need to make changes.';
+            } else {
+                $success_msg .= '. Your submission is now locked and cannot be edited.';
+            }
+            $_SESSION['success'] = $success_msg;
+        } else {
+            $_SESSION['success'] = 'Draft saved';
+        }
+    }
+
     // Generate AI comment if paper was just submitted (first time or resubmission)
     // Note: On resubmission, previous comments (including AI) are soft-deleted, so we need a new AI comment
     // Generate whenever Submit button is clicked (not Save) and paper is not empty
@@ -518,25 +535,6 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
                 // Show error message to user
                 $_SESSION['error'] = 'Unable to contact AI for review. Check browser console for details.';
             }
-            
-            // TEMPORARY: Sleep to see the overlay
-            sleep(5);
-        }
-    }
-
-    if ( $USER->instructor ) {
-        $_SESSION['success'] = 'Instructions updated';
-    } else {
-        if ( $is_submit ) {
-            $success_msg = 'Paper submitted';
-            if ( $resubmit_allowed ) {
-                $success_msg .= '. You can reset your submission from the Main page if you need to make changes.';
-            } else {
-                $success_msg .= '. Your submission is now locked and cannot be edited.';
-            }
-            $_SESSION['success'] = $success_msg;
-        } else {
-            $_SESSION['success'] = 'Draft saved';
         }
     }
     header( 'Location: '.addSession('index.php') ) ;
