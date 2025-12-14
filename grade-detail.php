@@ -1,6 +1,7 @@
 <?php
 require_once "../config.php";
 \Tsugi\Core\LTIX::getConnection();
+require_once "points-util.php";
 
 use \Tsugi\Util\U;
 use \Tsugi\Util\LTI13;
@@ -44,7 +45,17 @@ if ( ! is_object($json) ) $json = new \stdClass();
 $old_lock = isset($json->lock) && $json->lock;
 
 $old_grade = $row ? $row['grade'] : 0;
-$old_percent = (int) ($old_grade * 100);
+
+// Get instructor_points setting
+use \Tsugi\Core\Settings;
+$instructor_points = Settings::linkGet('instructorpoints', 0);
+$instructor_points = intval($instructor_points);
+
+// Calculate old points from grade (if instructor_points > 0)
+$old_points = 0;
+if ( $instructor_points > 0 && $old_grade > 0 ) {
+    $old_points = (int) ($old_grade * $instructor_points);
+}
 
 $inst_note = $LAUNCH->result->getNote($user_id);
 
@@ -102,18 +113,46 @@ if ( isset($_POST['resetSubmission']) ) {
 
 // Handle incoming post to set the instructor points and update the grade
 if ( isset($_POST['instSubmit']) || isset($_POST['instSubmitAdvance']) ) {
+    // Get instructor_points setting
+    $instructor_points = Settings::linkGet('instructorpoints', 0);
+    $instructor_points = intval($instructor_points);
 
-    $percent = U::get($_POST, 'percent');
-    if ( U::strlen($percent) == 0 || $percent === null ) {
-        $percent = null;
-    } else if ( is_numeric($percent) ) {
-        $percent = $percent + 0;
+    $points = U::get($_POST, 'points');
+    if ( U::strlen($points) == 0 || $points === null ) {
+        $points = null;
+        $instructor_earned = 0;
+    } else if ( is_numeric($points) ) {
+        $points = intval($points);
+        if ( $instructor_points > 0 ) {
+            // Validate points are within range
+            if ( $points < 0 || $points > $instructor_points ) {
+                $_SESSION['error'] = "Points must be between 0 and {$instructor_points}.";
+                header( 'Location: '.addSession($gradeurl) ) ;
+                return;
+            }
+            $instructor_earned = $points;
+        } else {
+            $_SESSION['error'] = "Instructor points not configured. Cannot assign points.";
+            header( 'Location: '.addSession($gradeurl) ) ;
+            return;
+        }
     } else {
-        $_SESSION['error'] = "Points must either by a number or blank.";
+        $_SESSION['error'] = "Points must be a number or blank.";
         header( 'Location: '.addSession($gradeurl) ) ;
         return;
     }
-    $computed_grade = $percent / 100.0;
+
+    // Calculate overall grade using shared function with new instructor points
+    $points_data = calculatePoints($user_id, $LAUNCH->link->id, null, $instructor_earned);
+    $earned_points = $points_data['earned_points'];
+    $overall_points = $points_data['overall_points'];
+    
+    // Calculate grade as earned_points / overall_points (0.0 to 1.0 for LTI)
+    if ( $overall_points > 0 ) {
+        $computed_grade = floatval($earned_points) / floatval($overall_points);
+    } else {
+        $computed_grade = 0.0;
+    }
 
     $success = '';
 
@@ -216,8 +255,12 @@ if ( $next_user_id_ungraded !== false ) {
       echo('<input type="hidden" name="next_user_id_ungraded" value="'.$next_user_id_ungraded.'">');
 }
 
-echo('<label for="percent">Percentage (0-100)</label>
-      <input type="number" name="percent" id="grade" min="0" max="100" value="'.$old_percent.'"/><br/>');
+if ( $instructor_points > 0 ) {
+    echo('<label for="points">Instructor Points (0-'.$instructor_points.')</label>
+          <input type="number" name="points" id="grade" min="0" max="'.$instructor_points.'" value="'.$old_points.'"/><br/>');
+} else {
+    echo('<p><em>Instructor points not configured. Set instructor points in Settings to enable grading.</em></p>');
+}
 
 echo('<label for="lock">Student Submission Locked:</label>
       <input type="checkbox" name="lock" id="lock"'.

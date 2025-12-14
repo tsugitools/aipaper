@@ -1,5 +1,6 @@
 <?php
 require_once "../config.php";
+require_once "points-util.php";
 
 use \Tsugi\Util\U;
 use \Tsugi\Util\FakeName;
@@ -96,6 +97,16 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
             ':TYPE' => $comment_type
         )
     );
+    
+    // Recalculate and send grade to LTI if student made comment
+    if ( !$USER->instructor ) {
+        // Get current user's result_id for consistency with index.php
+        $my_result_id = $RESULT->id;
+        $points_data = calculatePoints($USER->id, $LAUNCH->link->id, $my_result_id);
+        if ( $points_data['overall_points'] > 0 ) {
+            sendGradeToLTI($USER->id, $points_data['earned_points'], $points_data['overall_points']);
+        }
+    }
     
     $_SESSION['success'] = 'Comment added successfully';
     $redirect_url = 'review.php?result_id='.$review_result_id;

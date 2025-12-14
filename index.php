@@ -1,5 +1,6 @@
 <?php
 require_once "../config.php";
+require_once "points-util.php";
 
 use \Tsugi\Util\U;
 use \Tsugi\Util\FakeName;
@@ -77,6 +78,7 @@ $min_comments = intval($min_comments);
 
 // Count how many unique submissions the current user has reviewed (for students only)
 $reviewed_count = 0;
+$total_comments_made = 0;
 if ( !$USER->instructor ) {
     $reviewed_row = $PDOX->rowDie(
         "SELECT COUNT(DISTINCT result_id) as cnt
@@ -85,6 +87,25 @@ if ( !$USER->instructor ) {
         array(':UID' => $USER->id)
     );
     $reviewed_count = $reviewed_row ? intval($reviewed_row['cnt']) : 0;
+    
+    // Count total comments made by this student (for points calculation)
+    $total_comments_row = $PDOX->rowDie(
+        "SELECT COUNT(*) as cnt
+         FROM {$p}aipaper_comment
+         WHERE user_id = :UID",
+        array(':UID' => $USER->id)
+    );
+    $total_comments_made = $total_comments_row ? intval($total_comments_row['cnt']) : 0;
+}
+
+// Calculate overall_points and earned_points using shared function
+$points_data = calculatePoints($USER->id, $LAUNCH->link->id, $result_id);
+$earned_points = $points_data['earned_points'];
+$overall_points = $points_data['overall_points'];
+
+// Send grade to LTI whenever student views the page (if they can see points)
+if ( !$USER->instructor && $overall_points > 0 ) {
+    sendGradeToLTI($USER->id, $earned_points, $overall_points);
 }
 
 // Load submissions for review (only if student has submitted)
@@ -504,6 +525,9 @@ if ( U::strlen($inst_note) > 0 ) {
             </div>
             
             <div style="margin-top: 20px;">
+                <?php if ( $overall_points > 0 ) { ?>
+                    <p><strong>Points:</strong> <?= $earned_points ?>/<?= $overall_points ?></p>
+                <?php } ?>
                 <p><strong>Review count:</strong> 
                 <?php if ( $min_comments == 0 ) { ?>
                     <?= $reviewed_count ?>
