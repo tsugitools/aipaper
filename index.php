@@ -532,20 +532,13 @@ if ( U::strlen($inst_note) > 0 ) {
                     $sub_date = new DateTime($sub['submission_date']);
                     $formatted_sub_date = $sub_date->format('M j, Y g:i A');
                 ?>
-                    <div class="review-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #f9f9f9;">
-                        <div style="margin-bottom: 10px;">
+                    <div class="review-item" style="margin-bottom: 15px; padding: 12px; border: 1px solid #ddd; border-radius: 4px; background-color: #f9f9f9; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
                             <strong><?= htmlentities($sub['display_name']) ?></strong>
-                            <span style="color: #666; font-size: 0.9em; margin-left: 10px;">Submitted: <?= htmlentities($formatted_sub_date) ?></span>
-                            <span style="color: #666; font-size: 0.9em; margin-left: 10px;">Your comments: <?= $sub['comment_count'] ?>/<?= $min_comments ?></span>
-                        </div>
-                        <div style="margin-bottom: 10px;">
-                            <?php 
-                            $preview_text = strip_tags($sub['raw_submission']);
-                            $preview = strlen($preview_text) > 200 ? substr($preview_text, 0, 200) . '...' : $preview_text;
-                            ?>
-                            <div style="color: #555; font-style: italic;">
-                                <?= nl2br(htmlentities($preview)) ?>
-                            </div>
+                            <span style="color: #666; font-size: 0.9em; margin-left: 15px;">Submitted: <?= htmlentities($formatted_sub_date) ?></span>
+                            <?php if ( $min_comments > 0 ) { ?>
+                                <span style="color: #666; font-size: 0.9em; margin-left: 15px;">Your comments: <?= $sub['comment_count'] ?>/<?= $min_comments ?></span>
+                            <?php } ?>
                         </div>
                         <div>
                             <a href="review.php?result_id=<?= $sub['result_id'] ?>" class="btn btn-primary btn-sm">Review</a>
