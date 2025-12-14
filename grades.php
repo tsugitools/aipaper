@@ -164,7 +164,14 @@ foreach ($rows as $row) {
     $flags_val = intval($row['flags']);
     $deleted_comments_val = intval($row['deleted_comments']);
     
-    $detail_url = addSession('grade-detail.php?user_id=' . $user_id);
+    // Preserve pagination and sorting when linking to detail page
+    $detail_params = array(
+        'user_id' => $user_id,
+        'page' => $page,
+        'sort' => $sort_col,
+        'dir' => $sort_dir
+    );
+    $detail_url = addSession('grade-detail.php?' . http_build_query($detail_params));
     
     echo '<tr>';
     echo '<td><a href="' . htmlentities($detail_url) . '">' . $displayname . '</a></td>';

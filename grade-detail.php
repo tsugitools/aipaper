@@ -51,7 +51,12 @@ if ( $instructor_points > 0 && $old_grade > 0 ) {
 }
 
 $gradeurl = Table::makeUrl('grade-detail.php', $getparms);
-$gradesurl = Table::makeUrl('grades.php', $getparms);
+// Build grades URL preserving pagination/sort params but excluding user_id
+$grades_params = array();
+if (isset($_GET['page'])) $grades_params['page'] = intval($_GET['page']);
+if (isset($_GET['sort'])) $grades_params['sort'] = U::get($_GET, 'sort');
+if (isset($_GET['dir'])) $grades_params['dir'] = U::get($_GET, 'dir');
+$gradesurl = Table::makeUrl('grades.php', $grades_params);
 
 // Handle reset submission
 if ( isset($_POST['resetSubmission']) ) {
