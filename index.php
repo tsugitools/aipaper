@@ -75,11 +75,26 @@ $can_edit = !$is_submitted || $USER->instructor;
 $min_comments = Settings::linkGet('mincomments', 0);
 $min_comments = intval($min_comments);
 
+// Count how many unique submissions the current user has reviewed (for students only)
+$reviewed_count = 0;
+if ( !$USER->instructor ) {
+    $reviewed_row = $PDOX->rowDie(
+        "SELECT COUNT(DISTINCT result_id) as cnt
+         FROM {$p}aipaper_comment
+         WHERE user_id = :UID",
+        array(':UID' => $USER->id)
+    );
+    $reviewed_count = $reviewed_row ? intval($reviewed_row['cnt']) : 0;
+}
+
 // Load submissions for review (only if student has submitted)
 $review_submissions = array();
 $review_page = 1;
 $total_review_pages = 0;
 if ( $is_submitted && !$USER->instructor ) {
+    // Get allowall setting
+    $allowall = Settings::linkGet('allowall', false);
+    
     // Get page number
     $review_page = isset($_GET['review_page']) ? max(1, intval($_GET['review_page'])) : 1;
     $items_per_page = 10;
@@ -118,9 +133,26 @@ if ( $is_submitted && !$USER->instructor ) {
         );
         $my_comments = $my_comment_count ? intval($my_comment_count['cnt']) : 0;
         
-        // Only include if current user hasn't reached minimum comments yet
-        // If min_comments is 0, show all submissions (no minimum requirement)
-        if ( $min_comments == 0 || $my_comments < $min_comments ) {
+        // Filter logic:
+        // - If min_comments == 0: show all submissions
+        // - If reviewed_count > 0 and reviewed_count < min_comments: only show submissions where user hasn't reached min_comments (to help reach minimum)
+        // - If reviewed_count >= min_comments and allowall is checked: show all submissions
+        // - If reviewed_count >= min_comments and allowall is not checked: only show submissions where user hasn't reached min_comments
+        $should_include = false;
+        if ( $min_comments == 0 ) {
+            $should_include = true;
+        } else if ( $reviewed_count > 0 && $reviewed_count < $min_comments ) {
+            // User is working toward minimum - only show submissions that help them reach it
+            $should_include = ($my_comments < $min_comments);
+        } else if ( $reviewed_count >= $min_comments && $allowall ) {
+            // User has met minimum and allowall is checked - show all submissions
+            $should_include = true;
+        } else {
+            // Default: only show submissions where user hasn't reached min_comments
+            $should_include = ($my_comments < $min_comments);
+        }
+        
+        if ( $should_include ) {
             $submissions_with_counts[] = array(
                 'result_id' => $sub_row['result_id'],
                 'user_id' => $sub_row['user_id'],
@@ -445,6 +477,18 @@ if ( U::strlen($inst_note) > 0 ) {
                 <strong>Status:</strong> Your paper has been submitted.
             </div>
             
+            <div style="margin-top: 20px;">
+                <p><strong>Review count:</strong> 
+                <?php if ( $min_comments == 0 ) { ?>
+                    <?= $reviewed_count ?>
+                <?php } else if ( $reviewed_count < $min_comments ) { ?>
+                    <?= $reviewed_count ?>/<?= $min_comments ?>
+                <?php } else { ?>
+                    <?= $reviewed_count ?>
+                <?php } ?>
+                </p>
+            </div>
+            
             <div style="margin-top: 30px;">
                 <h4>
                     Your Paper
@@ -555,7 +599,15 @@ if ( U::strlen($inst_note) > 0 ) {
     
     <?php if ( $is_submitted ) { ?>
     <div class="student-section" id="section-review">
-        <h3>Review Other Submissions</h3>
+        <p><strong>Review count:</strong> 
+        <?php if ( $min_comments == 0 ) { ?>
+            <?= $reviewed_count ?>
+        <?php } else if ( $reviewed_count < $min_comments ) { ?>
+            <?= $reviewed_count ?>/<?= $min_comments ?>
+        <?php } else { ?>
+            <?= $reviewed_count ?>
+        <?php } ?>
+        </p>
         <p>Review and comment on other students' submissions. Submissions are sorted by oldest first, prioritizing those that need more comments.</p>
         
         <?php if ( count($review_submissions) > 0 ) { ?>
