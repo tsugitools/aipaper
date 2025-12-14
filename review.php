@@ -383,7 +383,7 @@ foreach ( $comment_rows as $comment_row ) {
                 ? $comment_row['displayname'] 
                 : FakeName::getName($comment_row['user_id']);
         } else {
-            // If userealnames is false: students see fake name, instructors see real name (fake in parentheses)
+            // If userealnames is false: students see generated name, instructors see real name (generated name in parentheses)
             if ( $USER->instructor ) {
                 $real_name = !empty($comment_row['displayname']) ? $comment_row['displayname'] : '';
                 $fake_name = FakeName::getName($comment_row['user_id']);
@@ -401,7 +401,7 @@ foreach ( $comment_rows as $comment_row ) {
 }
 
 // Get display name for the submission author
-// If userealnames is false: students see fake name, instructors see real name (fake in parentheses)
+// If userealnames is false: students see generated name, instructors see real name (generated name in parentheses)
 if ( $use_real_names ) {
     $author_name = !empty($review_result['displayname']) 
         ? $review_result['displayname'] 

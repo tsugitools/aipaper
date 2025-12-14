@@ -252,7 +252,7 @@ if ( $result_row ) {
     if ( $use_real_names ) {
         $display_name = htmlentities($real_displayname);
     } else {
-        // If userealnames is false: students see fake name, instructors see real name (fake in parentheses)
+        // If userealnames is false: students see generated name, instructors see real name (generated name in parentheses)
         if ( $LAUNCH->user->instructor ) {
             $display_name = htmlentities($real_displayname);
             if ( !empty($fake_displayname) ) {

@@ -107,7 +107,7 @@ $sort_sql = isset($sort_sql_map[$sort_col]) ? $sort_sql_map[$sort_col] : 'COALES
 $sort_dir_sql = ($sort_dir == 'desc') ? 'DESC' : 'ASC';
 
 // Build ORDER BY clause: primary sort, then displayname as secondary (except when already sorting by displayname)
-// When fake name search is active, disable sorting and use simple displayname order
+// When generated name search is active, disable sorting and use simple displayname order
 if ( !empty($fake_name_search) ) {
     $order_by = 'u.displayname ASC';
 } elseif ($sort_col == 'displayname') {
@@ -123,7 +123,7 @@ if ( !empty($search_term) ) {
     $search_where = " AND (u.displayname LIKE :SEARCH OR u.email LIKE :SEARCH)";
     $search_params[':SEARCH'] = '%' . $search_term . '%';
 }
-// If fake name search is active, filter by matching user_ids
+// If generated name search is active, filter by matching user_ids
 if ( !empty($fake_name_search) && count($fake_name_user_ids) > 0 ) {
     $placeholders = array();
     foreach ( $fake_name_user_ids as $idx => $uid ) {
@@ -220,7 +220,7 @@ function buildPageUrl($page_num) {
     return addSession('grades.php?' . http_build_query($params));
 }
 
-// Render sortable header (disabled when fake name search is active)
+// Render sortable header (disabled when generated name search is active)
 function renderSortHeader($label, $col, $current_sort, $current_dir, $disable_sort = false) {
     if ( $disable_sort ) {
         // Just show the label without link or arrow
@@ -234,7 +234,7 @@ function renderSortHeader($label, $col, $current_sort, $current_dir, $disable_so
     return '<a href="' . htmlentities($url) . '">' . htmlentities($label) . $arrow . '</a>';
 }
 
-// Get userealnames setting (used for display and to determine if fake name search should be shown)
+// Get userealnames setting (used for display and to determine if generated name search should be shown)
 $use_real_names = Settings::linkGet('userealnames', false);
 
 // Build and render the table
@@ -249,12 +249,12 @@ echo '<label for="search" class="sr-only">Search</label>';
 echo '<input type="text" class="form-control" id="search" name="search" placeholder="Search by name or email" value="' . htmlentities($search_term) . '" style="width: 300px;">';
 echo '<button type="submit" class="btn btn-primary" name="regular_search" style="margin-left: 5px;" onclick="document.getElementById(\'fake_name_search\').value = \'\';">Search</button>';
 echo '</div>';
-// Fake name search (only shown if userealnames is false)
+// Generated name search (only shown if userealnames is false)
 if ( !$use_real_names ) {
     echo '<div class="form-group" style="margin-left: 15px;">';
-    echo '<label for="fake_name_search" class="sr-only">Search by Fake Name</label>';
-    echo '<input type="text" class="form-control" id="fake_name_search" name="fake_name_search" placeholder="Search by fake name" value="' . htmlentities($fake_name_search) . '" style="width: 300px;">';
-    echo '<button type="submit" name="fake_search" class="btn btn-info" style="margin-left: 5px;" onclick="document.getElementById(\'search\').value = \'\';">Search by Fake Name</button>';
+    echo '<label for="fake_name_search" class="sr-only">Search by Generated Name</label>';
+    echo '<input type="text" class="form-control" id="fake_name_search" name="fake_name_search" placeholder="Search by generated name" value="' . htmlentities($fake_name_search) . '" style="width: 300px;">';
+    echo '<button type="submit" name="fake_search" class="btn btn-info" style="margin-left: 5px;" onclick="document.getElementById(\'search\').value = \'\';">Search by Generated Name</button>';
     echo '</div>';
 }
 // Preserve sort parameters
@@ -276,10 +276,10 @@ if ( !empty($search_term) ) {
 }
 if ( !empty($fake_name_search) ) {
     if ( count($fake_name_user_ids) > 0 ) {
-        echo '<p class="text-muted">Found ' . $total_rows . ' student' . ($total_rows == 1 ? '' : 's') . ' matching fake name "' . htmlentities($fake_name_search) . '" (sorting disabled)</p>';
+        echo '<p class="text-muted">Found ' . $total_rows . ' student' . ($total_rows == 1 ? '' : 's') . ' matching generated name "' . htmlentities($fake_name_search) . '" (sorting disabled)</p>';
     } else {
         echo '<div class="alert alert-warning" style="margin-bottom: 20px;">';
-        echo 'No matches found for fake name "' . htmlentities($fake_name_search) . '"';
+        echo 'No matches found for generated name "' . htmlentities($fake_name_search) . '"';
         echo '</div>';
     }
 }
@@ -309,7 +309,7 @@ foreach ($rows as $row) {
     if ( $use_real_names ) {
         $displayname = $real_displayname;
     } else {
-        // If userealnames is false: students see fake name, instructors see real name (fake in parentheses)
+        // If userealnames is false: students see generated name, instructors see real name (generated name in parentheses)
         if ( $LAUNCH->user->instructor ) {
             $displayname = $real_displayname;
             if ( !empty($fake_displayname) ) {
