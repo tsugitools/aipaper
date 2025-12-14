@@ -498,9 +498,25 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
                 $user_email = $LAUNCH->user->email ?? 'unknown';
                 error_log("AI Comment: Comment successfully added to database - result_id: {$result_id}, user_id: {$user_id}, email: {$user_email}, comment_length: " . strlen($ai_result['comment']));
             } else {
-                // Log error but don't fail submission
+                // Log error to server logs
                 $user_id = $LAUNCH->user->id ?? 'unknown';
-                error_log("AI Comment: Generation failed - result_id: {$result_id}, user_id: {$user_id}, error: " . ($ai_result['error'] ?? 'Unknown error'));
+                $error_message = $ai_result['error'] ?? 'Unknown error';
+                $error_log_entry = "AI Comment: Generation failed - result_id: {$result_id}, user_id: {$user_id}, error: {$error_message}";
+                if ( isset($ai_result['error_log']) ) {
+                    $error_log_entry .= "\nFull error log: " . $ai_result['error_log'];
+                }
+                error_log($error_log_entry);
+                
+                // Store error details for console.log (will be output in JavaScript)
+                $error_for_console = array(
+                    'message' => 'Unable to contact AI for review',
+                    'error' => $error_message,
+                    'error_log' => $ai_result['error_log'] ?? null
+                );
+                $_SESSION['ai_error_console'] = json_encode($error_for_console);
+                
+                // Show error message to user
+                $_SESSION['error'] = 'Unable to contact AI for review. Check browser console for details.';
             }
             
             // TEMPORARY: Sleep to see the overlay
@@ -975,6 +991,27 @@ function showSpinnerOverlay() {
 }
 
 $(document).ready( function () {
+    // Log AI error to console if present
+    <?php if ( isset($_SESSION['ai_error_console']) ) { 
+        $error_data = json_decode($_SESSION['ai_error_console'], true);
+        if ( $error_data ) {
+            $error_json = json_encode($error_data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    ?>
+        try {
+            var aiError = <?= $error_json ?>;
+            console.error('AI Comment Generation Failed:', aiError.message);
+            console.error('Error:', aiError.error);
+            if ( aiError.error_log ) {
+                console.error('Error Log:', aiError.error_log);
+            }
+        } catch (e) {
+            console.error('Error parsing AI error details:', e);
+        }
+    <?php 
+        }
+        // Clear the session variable so it doesn't show again on refresh
+        unset($_SESSION['ai_error_console']);
+    } ?>
     <?php if ( $USER->instructor ) { ?>
         // Instructor: Instructions editor
         ClassicEditor

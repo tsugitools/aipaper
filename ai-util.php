@@ -101,20 +101,37 @@ function generateAIComment($instructions, $paper_text, $api_url = null) {
     curl_close($ch);
     
     if ( $curl_error ) {
-        error_log("AI Comment: API request failed - CURL Error: {$curl_error} - user_id: {$user_id}, api_url: '{$api_url}'");
-        return array('success' => false, 'error' => 'CURL Error: ' . $curl_error);
+        $error_log_msg = "AI Comment: API request failed - CURL Error: {$curl_error} - user_id: {$user_id}, api_url: '{$api_url}'";
+        error_log($error_log_msg);
+        return array(
+            'success' => false, 
+            'error' => 'CURL Error: ' . $curl_error,
+            'error_log' => $error_log_msg
+        );
     }
     
     if ( $http_code !== 200 ) {
-        error_log("AI Comment: API request failed - HTTP {$http_code} - user_id: {$user_id}, api_url: '{$api_url}', response: " . substr($response, 0, 200));
-        return array('success' => false, 'error' => 'API returned HTTP ' . $http_code);
+        $response_preview = substr($response, 0, 200);
+        $error_log_msg = "AI Comment: API request failed - HTTP {$http_code} - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
+        error_log($error_log_msg);
+        return array(
+            'success' => false, 
+            'error' => 'API returned HTTP ' . $http_code,
+            'error_log' => $error_log_msg
+        );
     }
     
     $response_data = json_decode($response, true);
     
     if ( !$response_data || !isset($response_data['comment']) ) {
-        error_log("AI Comment: API request failed - Invalid response format - user_id: {$user_id}, api_url: '{$api_url}', response: " . substr($response, 0, 200));
-        return array('success' => false, 'error' => 'Invalid API response format');
+        $response_preview = substr($response, 0, 200);
+        $error_log_msg = "AI Comment: API request failed - Invalid response format - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
+        error_log($error_log_msg);
+        return array(
+            'success' => false, 
+            'error' => 'Invalid API response format',
+            'error_log' => $error_log_msg
+        );
     }
     
     error_log("AI Comment: API request successful - user_id: {$user_id}, api_url: '{$api_url}', comment_length: " . strlen($response_data['comment']));
