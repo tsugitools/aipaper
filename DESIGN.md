@@ -43,9 +43,10 @@ Here are the configuration options:
 
 - **Instructions / Rubric**: Editable by instructor in the main interface, viewable by students
 - **Instructor grade points**: Points awarded by instructor (can be zero)
+- **Submit points**: Points awarded for submitting a paper (can be zero)
 - **Points earned for each comment**: Points earned per comment on another student's submission (can be zero)
 - **Minimum number of comments per student**: Required number of comments each student must make (can be zero)
-- **Note**: Overall points = instructor_points + (comment_points * min_comments). Grades will only be sent for this activity if overall_points > 0.
+- **Note**: Overall points = instructor_points + submit_points + (comment_points * min_comments). Grades will only be sent for this activity if overall_points > 0.
 - **Use actual student names**: Checkbox to use actual student names instead of generated names
 - **Allow students to see and comment on all submissions after the minimum has been met**: Checkbox to allow students to see and comment on all submissions after meeting the minimum comment requirement
 - **Allow students to reset and resubmit their papers**: Checkbox to enable resubmission capability

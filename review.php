@@ -93,13 +93,15 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
 }
 
 // Load existing comments
+// For students, hide soft-deleted comments. For instructors, show them with indication.
 $use_real_names = Settings::linkGet('userealnames', false);
+$deleted_filter = $USER->instructor ? '' : 'AND c.deleted = 0';
 $comment_rows = $PDOX->allRowsDie(
-    "SELECT c.comment_id, c.comment_text, c.comment_type, c.created_at, c.user_id,
+    "SELECT c.comment_id, c.comment_text, c.comment_type, c.created_at, c.user_id, c.deleted,
             u.displayname, u.email
      FROM {$p}aipaper_comment c
      LEFT JOIN {$p}lti_user u ON c.user_id = u.user_id
-     WHERE c.result_id = :RID
+     WHERE c.result_id = :RID $deleted_filter
      ORDER BY c.created_at DESC",
     array(':RID' => $review_result_id)
 );
@@ -111,7 +113,8 @@ foreach ( $comment_rows as $comment_row ) {
         'comment_text' => $comment_row['comment_text'],
         'comment_type' => $comment_row['comment_type'],
         'created_at' => $comment_row['created_at'],
-        'user_id' => $comment_row['user_id']
+        'user_id' => $comment_row['user_id'],
+        'deleted' => isset($comment_row['deleted']) && ($comment_row['deleted'] == 1 || $comment_row['deleted'] == true)
     );
     
     // Get display name based on comment type and settings
@@ -216,11 +219,14 @@ $OUTPUT->welcomeUserCourse();
                 $comment_date = new DateTime($comment['created_at']);
                 $formatted_date = $comment_date->format('M j, Y g:i A');
             ?>
-                <div class="comment-item">
+                <div class="comment-item" style="background-color: <?= isset($comment['deleted']) && $comment['deleted'] ? '#ffe6e6' : '#f9f9f9' ?>;">
                     <div style="margin-bottom: 10px;">
                         <span class="label <?= $badge_class ?>" style="margin-right: 8px;"><?= htmlentities($badge_text) ?></span>
                         <strong><?= htmlentities($comment['display_name']) ?></strong>
                         <span style="color: #666; font-size: 0.9em; margin-left: 10px;"><?= htmlentities($formatted_date) ?></span>
+                        <?php if ( isset($comment['deleted']) && $comment['deleted'] ) { ?>
+                            <span class="label label-warning" style="margin-left: 10px;">Soft Deleted</span>
+                        <?php } ?>
                     </div>
                     <div class="comment-text" style="line-height: 1.6;">
                         <div class="comment-html-<?= $comment['comment_id'] ?>"></div>

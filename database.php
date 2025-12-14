@@ -50,6 +50,7 @@ array( "{$CFG->dbprefix}aipaper_comment",
     user_id      INTEGER NULL,  -- NULL for AI comments
     comment_text TEXT NOT NULL,
     comment_type ENUM('student', 'instructor', 'AI') NOT NULL,
+    deleted      TINYINT(1) NOT NULL DEFAULT 0,
     flagged      TINYINT(1) NOT NULL DEFAULT 0,
     flagged_by   INTEGER NULL,  -- user_id who flagged this comment
     json         TEXT NULL,
@@ -73,7 +74,8 @@ array( "{$CFG->dbprefix}aipaper_comment",
         ON DELETE SET NULL ON UPDATE CASCADE,
 
     INDEX idx_result_id (result_id),
-    INDEX idx_user_id (user_id)
+    INDEX idx_user_id (user_id),
+    INDEX idx_deleted (deleted)
 ) ENGINE = InnoDB DEFAULT CHARSET=utf8"),
 
 array( "{$CFG->dbprefix}aipaper_like",

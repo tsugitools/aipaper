@@ -83,9 +83,11 @@ if ( isset($_POST['resetSubmission']) ) {
             array(':JSON' => $json_str, ':RID' => $result_id)
         );
         
-        // Delete all comments on this submission
+        // Soft delete all comments on this submission (for points calculation, but hidden from students)
         $PDOX->queryDie(
-            "DELETE FROM {$p}aipaper_comment WHERE result_id = :RID",
+            "UPDATE {$p}aipaper_comment 
+             SET deleted = 1, updated_at = NOW()
+             WHERE result_id = :RID",
             array(':RID' => $result_id)
         );
         
@@ -257,7 +259,7 @@ if ( isset($result_id) ) {
             echo('<form method="post" style="margin-top: 20px;">
                   <input type="hidden" name="user_id" value="'.$user_id.'">');
             echo('<input type="submit" name="resetSubmission" value="Reset Student Submission" class="btn btn-warning" 
-                  onclick="return confirm(\'Are you sure you want to reset this submission? This will make it editable again and delete all comments.\');">');
+                  onclick="return confirm(\'Are you sure you want to reset this submission? This will make it editable again. Comments will be hidden but will still count for points.\');">');
             echo('</form>');
         }
     }

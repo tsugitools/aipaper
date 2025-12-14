@@ -152,12 +152,14 @@ if ( $is_submitted && !$USER->instructor ) {
 $comments = array();
 if ( $is_submitted ) {
     $use_real_names = Settings::linkGet('userealnames', false);
+    // For students, hide soft-deleted comments. For instructors, show them with indication.
+    $deleted_filter = $USER->instructor ? '' : 'AND c.deleted = 0';
     $comment_rows = $PDOX->allRowsDie(
-        "SELECT c.comment_id, c.comment_text, c.comment_type, c.created_at, c.user_id,
+        "SELECT c.comment_id, c.comment_text, c.comment_type, c.created_at, c.user_id, c.deleted,
                 u.displayname, u.email
          FROM {$p}aipaper_comment c
          LEFT JOIN {$p}lti_user u ON c.user_id = u.user_id
-         WHERE c.result_id = :RID
+         WHERE c.result_id = :RID $deleted_filter
          ORDER BY c.created_at DESC",
         array(':RID' => $result_id)
     );
@@ -168,7 +170,8 @@ if ( $is_submitted ) {
             'comment_text' => $comment_row['comment_text'],
             'comment_type' => $comment_row['comment_type'],
             'created_at' => $comment_row['created_at'],
-            'user_id' => $comment_row['user_id']
+            'user_id' => $comment_row['user_id'],
+            'deleted' => isset($comment_row['deleted']) && ($comment_row['deleted'] == 1 || $comment_row['deleted'] == true)
         );
         
         // Get display name based on comment type and settings
@@ -204,9 +207,20 @@ if ( count($_POST) > 0 && isset($_POST['reset_submission']) ) {
     
     // Reset submission status (keep content, just make it editable again)
     // Reset submitted column but keep all content (paper, AI enhanced, comments)
+    // Soft delete all comments on this submission
     $PDOX->queryDie(
         "UPDATE {$p}aipaper_result 
          SET submitted = false, updated_at = NOW()
+         WHERE result_id = :RID",
+        array(
+            ':RID' => $result_id
+        )
+    );
+    
+    // Soft delete all comments on this submission (for points calculation, but hidden from students)
+    $PDOX->queryDie(
+        "UPDATE {$p}aipaper_comment 
+         SET deleted = 1, updated_at = NOW()
          WHERE result_id = :RID",
         array(
             ':RID' => $result_id
@@ -335,10 +349,11 @@ $OUTPUT->flashMessages();
 
 if ( $USER->instructor ) {
 SettingsForm::start();
-    SettingsForm::text('instructorpoints', __('Instructor grade points (can be zero)'));
+SettingsForm::text('submitpoints', __('Submit points (can be zero) - points earned for submitting a paper'));
+    SettingsForm::text('mincomments', __('Minimum number of comments each student must make (if zero, students can comment on any other student\'s submission)'));
     SettingsForm::text('commentpoints', __('Points earned for each comment (can be zero)'));
-    SettingsForm::text('mincomments', __('Minimum number of comments per student (can be zero)'));
-    SettingsForm::note(__('overall_points = instructor_points + (comment_points * min_comments). Grades will only be sent for this activity if overall_points > 0.'));
+    SettingsForm::text('instructorpoints', __('Instructor grade points (can be zero)'));
+    SettingsForm::note(__('overall_points = instructor_points + submit_points + (comment_points * min_comments). Grades will only be sent for this activity if overall_points > 0.'));
     SettingsForm::checkbox('userealnames', __('Use actual student names instead of generated names'));
     SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
     SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
@@ -463,11 +478,14 @@ if ( U::strlen($inst_note) > 0 ) {
                             $comment_date = new DateTime($comment['created_at']);
                             $formatted_date = $comment_date->format('M j, Y g:i A');
                         ?>
-                            <div class="comment-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #f9f9f9;">
+                            <div class="comment-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: <?= isset($comment['deleted']) && $comment['deleted'] ? '#ffe6e6' : '#f9f9f9' ?>;">
                                 <div style="margin-bottom: 10px;">
                                     <span class="label <?= $badge_class ?>" style="margin-right: 8px;"><?= htmlentities($badge_text) ?></span>
                                     <strong><?= htmlentities($comment['display_name']) ?></strong>
                                     <span style="color: #666; font-size: 0.9em; margin-left: 10px;"><?= htmlentities($formatted_date) ?></span>
+                                    <?php if ( isset($comment['deleted']) && $comment['deleted'] ) { ?>
+                                        <span class="label label-warning" style="margin-left: 10px;">Soft Deleted</span>
+                                    <?php } ?>
                                 </div>
                                 <div class="comment-text" style="line-height: 1.6;">
                                     <div class="comment-html-<?= $comment['comment_id'] ?>"></div>
@@ -762,7 +780,7 @@ $(document).ready( function () {
         // Handle Reset Submission button click (from menu)
         $('#menu-reset-btn').on('click', function(e) {
             e.preventDefault();
-            if ( confirm('Are you sure you want to reset your submission? This will delete all your submission content, AI enhanced content, and all comments. This action cannot be undone.') ) {
+            if ( confirm('Are you sure you want to reset your submission? This will make your paper editable again. Comments on your submission will be hidden but will still count for points.') ) {
                 $('#hidden-reset-btn').click();
             }
         });
