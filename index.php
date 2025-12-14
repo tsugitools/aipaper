@@ -312,6 +312,11 @@ if ( $LAUNCH->user->instructor ) {
     }
     $submenu = new \Tsugi\UI\Menu();
     $submenu->addLink(__('Settings'), '#', /* push */ false, SettingsForm::attr());
+    // Only show test data generator if key is '12345'
+    $key = $LAUNCH->key->key ?? '';
+    if ( $key === '12345' ) {
+        $submenu->addLink(__('Generate Test Data'), 'testdata.php');
+    }
     $menu->addRight(__('Help'), 'help.php');
     $menu->addRight(__('Instructor'), $submenu, /* push */ false);
 } else {
@@ -348,8 +353,8 @@ $OUTPUT->topNav($menu);
 $OUTPUT->flashMessages();
 
 if ( $USER->instructor ) {
-SettingsForm::start();
-SettingsForm::text('submitpoints', __('Submit points (can be zero) - points earned for submitting a paper'));
+    SettingsForm::start();
+    SettingsForm::text('submitpoints', __('Submit points (can be zero) - points earned for submitting a paper'));
     SettingsForm::text('mincomments', __('Minimum number of comments each student must make (if zero, students can comment on any other student\'s submission)'));
     SettingsForm::text('commentpoints', __('Points earned for each comment (can be zero)'));
     SettingsForm::text('instructorpoints', __('Instructor grade points (can be zero)'));
@@ -357,6 +362,7 @@ SettingsForm::text('submitpoints', __('Submit points (can be zero) - points earn
     SettingsForm::checkbox('userealnames', __('Use actual student names instead of generated names'));
     SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
     SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
+    // TODO: Add an auto-grade ellapsed time (might not need ths - but think about it)
     SettingsForm::dueDate();
     SettingsForm::done();
     SettingsForm::end();
@@ -577,13 +583,13 @@ if ( U::strlen($inst_note) > 0 ) {
             <?php if ( $total_review_pages > 1 ) { ?>
                 <div class="pagination" style="margin-top: 20px; text-align: center;">
                     <?php if ( $review_page > 1 ) { ?>
-                        <a href="?review_page=<?= $review_page - 1 ?>" class="btn btn-default">Previous</a>
+                        <a href="<?= addSession('index.php?review_page=' . ($review_page - 1)) ?>" class="btn btn-default">Previous</a>
                     <?php } ?>
                     <span style="margin: 0 15px;">
                         Page <?= $review_page ?> of <?= $total_review_pages ?>
                     </span>
                     <?php if ( $review_page < $total_review_pages ) { ?>
-                        <a href="?review_page=<?= $review_page + 1 ?>" class="btn btn-default">Next</a>
+                        <a href="<?= addSession('index.php?review_page=' . ($review_page + 1)) ?>" class="btn btn-default">Next</a>
                     <?php } ?>
                 </div>
             <?php } ?>
@@ -737,8 +743,16 @@ $(document).ready( function () {
             $('#section-' + section).addClass('active');
         });
         
-        // Set Main as active by default
-        $('.tsugi-nav-link[data-section="main"]').addClass('active');
+        // Set Main as active by default, unless review_page is in URL
+        <?php if ( isset($_GET['review_page']) ) { ?>
+            // Auto-navigate to Review section if review_page parameter is present
+            $('.tsugi-nav-link').removeClass('active');
+            $('.student-section').removeClass('active');
+            $('.tsugi-nav-link[data-section="review"]').addClass('active');
+            $('#section-review').addClass('active');
+        <?php } else { ?>
+            $('.tsugi-nav-link[data-section="main"]').addClass('active');
+        <?php } ?>
         
         // Handle menu Save button click
         $('#menu-save-btn').on('click', function(e) {
