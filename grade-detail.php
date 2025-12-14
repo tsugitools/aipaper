@@ -13,6 +13,12 @@ use \Tsugi\Util\FakeName;
 
 $LAUNCH = LTIX::requireData();
 
+// This page is instructor-only
+if ( ! $LAUNCH->user->instructor ) {
+    http_response_code(403);
+    die('Access denied. This page is for instructors only.');
+}
+
 $user_id = U::safe_href(U::get($_REQUEST, 'user_id'));
 
 $for_user = false;
@@ -61,8 +67,8 @@ if (isset($_GET['search']) && !empty($_GET['search'])) $grades_params['search'] 
 if (isset($_GET['fake_name_search']) && !empty($_GET['fake_name_search'])) $grades_params['fake_name_search'] = U::get($_GET, 'fake_name_search');
 $gradesurl = Table::makeUrl('grades.php', $grades_params);
 
-// Handle reset submission
-if ( isset($_POST['resetSubmission']) ) {
+// Handle reset submission (instructor-only)
+if ( isset($_POST['resetSubmission']) && $LAUNCH->user->instructor ) {
     $p = $CFG->dbprefix;
     
     // Get result_id for this user
@@ -74,23 +80,13 @@ if ( isset($_POST['resetSubmission']) ) {
     if ( $result_row ) {
         $result_id = $result_row['result_id'];
         
-        // Get current JSON to update submission status
-        $paper_row = $PDOX->rowDie(
-            "SELECT json FROM {$p}aipaper_result WHERE result_id = :RID",
-            array(':RID' => $result_id)
-        );
-        
-        $paper_json = json_decode($paper_row['json'] ?? '{}');
-        if ( !is_object($paper_json) ) $paper_json = new \stdClass();
-        $paper_json->submitted = false; // Mark as not submitted
-        $json_str = json_encode($paper_json);
-        
-        // Update submission status (keep the text, just mark as not submitted)
+        // Reset submission status (keep content, just make it editable again)
+        // Update submitted column - this is the source of truth for submission status
         $PDOX->queryDie(
             "UPDATE {$p}aipaper_result 
-             SET json = :JSON, updated_at = NOW()
+             SET submitted = 0, updated_at = NOW()
              WHERE result_id = :RID",
-            array(':JSON' => $json_str, ':RID' => $result_id)
+            array(':RID' => $result_id)
         );
         
         // Soft delete all comments on this submission (for points calculation, but hidden from students)
@@ -102,11 +98,26 @@ if ( isset($_POST['resetSubmission']) ) {
         );
         
         $_SESSION['success'] = 'Submission reset. Student can now edit their submission.';
+        
+        // Recalculate and send grade to LTI after reset
+        $points_data = calculatePoints($user_id, $LAUNCH->link->id, $result_id);
+        if ( $points_data['overall_points'] > 0 ) {
+            sendGradeToLTI($user_id, $points_data['earned_points'], $points_data['overall_points']);
+        }
+        
+        // Preserve pagination/sort/search params when redirecting
+        $redirect_params = array('user_id' => $user_id);
+        if (isset($_POST['page'])) $redirect_params['page'] = intval($_POST['page']);
+        if (isset($_POST['sort'])) $redirect_params['sort'] = U::get($_POST, 'sort');
+        if (isset($_POST['dir'])) $redirect_params['dir'] = U::get($_POST, 'dir');
+        if (isset($_POST['search']) && !empty($_POST['search'])) $redirect_params['search'] = U::get($_POST, 'search');
+        if (isset($_POST['fake_name_search']) && !empty($_POST['fake_name_search'])) $redirect_params['fake_name_search'] = U::get($_POST, 'fake_name_search');
+        
+        header( 'Location: '.addSession('grade-detail.php?' . http_build_query($redirect_params)) ) ;
     } else {
         $_SESSION['error'] = 'No submission found to reset.';
+        header( 'Location: '.addSession('grade-detail.php?user_id='.$user_id) ) ;
     }
-    
-    header( 'Location: '.addSession($gradeurl) ) ;
     return;
 }
 
@@ -356,19 +367,30 @@ if ( !isset($result_id) ) {
 
 if ( isset($result_id) ) {
     $paper_row = $PDOX->rowDie(
-        "SELECT raw_submission, json FROM {$p}aipaper_result WHERE result_id = :RID",
+        "SELECT raw_submission, submitted, json FROM {$p}aipaper_result WHERE result_id = :RID",
         array(':RID' => $result_id)
     );
     
     if ( $paper_row ) {
-        // Check if submitted from JSON
-        $paper_json = json_decode($paper_row['json'] ?? '{}');
-        if ( !is_object($paper_json) ) $paper_json = new \stdClass();
-        $is_submitted = isset($paper_json->submitted) && $paper_json->submitted === true;
+        // Check if submitted - check the submitted column (primary source of truth)
+        $is_submitted = ($paper_row['submitted'] == 1 || $paper_row['submitted'] === true);
         
         if ( $is_submitted ) {
-            echo('<form method="post" style="margin-top: 20px;">
-                  <input type="hidden" name="user_id" value="'.$user_id.'">');
+            // Preserve pagination/sort/search params when redirecting after reset
+            $reset_params = array('user_id' => $user_id);
+            if (isset($_GET['page'])) $reset_params['page'] = intval($_GET['page']);
+            if (isset($_GET['sort'])) $reset_params['sort'] = U::get($_GET, 'sort');
+            if (isset($_GET['dir'])) $reset_params['dir'] = U::get($_GET, 'dir');
+            if (isset($_GET['search']) && !empty($_GET['search'])) $reset_params['search'] = U::get($_GET, 'search');
+            if (isset($_GET['fake_name_search']) && !empty($_GET['fake_name_search'])) $reset_params['fake_name_search'] = U::get($_GET, 'fake_name_search');
+            
+            echo('<form method="post" style="margin-top: 20px;">');
+            foreach ($reset_params as $key => $value) {
+                if ($key != 'user_id') {
+                    echo('<input type="hidden" name="' . htmlentities($key) . '" value="' . htmlentities($value) . '">');
+                }
+            }
+            echo('<input type="hidden" name="user_id" value="'.$user_id.'">');
             echo('<input type="submit" name="resetSubmission" value="Reset Student Submission" class="btn btn-warning" 
                   onclick="return confirm(\'Are you sure you want to reset this submission? This will make it editable again. Comments will be hidden but will still count for points.\');">');
             echo('</form>');
