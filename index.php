@@ -92,8 +92,9 @@ $review_submissions = array();
 $review_page = 1;
 $total_review_pages = 0;
 if ( $is_submitted && !$USER->instructor ) {
-    // Get allowall setting
-    $allowall = Settings::linkGet('allowall', false);
+    // Get allowall setting - if min_comments is 0, allowall is effectively true
+    $allowall_setting = Settings::linkGet('allowall', false);
+    $allowall = ($min_comments == 0) ? true : $allowall_setting;
     
     // Get page number
     $review_page = isset($_GET['review_page']) ? max(1, intval($_GET['review_page'])) : 1;
@@ -135,18 +136,23 @@ if ( $is_submitted && !$USER->instructor ) {
         
         // Filter logic:
         // - If min_comments == 0: show all submissions
-        // - If reviewed_count > 0 and reviewed_count < min_comments: only show submissions where user hasn't reached min_comments (to help reach minimum)
+        // - If reviewed_count < min_comments: only show submissions where user hasn't reached min_comments (to help reach minimum)
+        //   BUT always include submissions user has already commented on (my_comments >= 1)
         // - If reviewed_count >= min_comments and allowall is checked: show all submissions
-        // - If reviewed_count >= min_comments and allowall is not checked: only show submissions where user hasn't reached min_comments
+        // - If reviewed_count >= min_comments and allowall is not checked: only show submissions user has already reviewed (my_comments >= 1)
         $should_include = false;
         if ( $min_comments == 0 ) {
             $should_include = true;
-        } else if ( $reviewed_count > 0 && $reviewed_count < $min_comments ) {
-            // User is working toward minimum - only show submissions that help them reach it
-            $should_include = ($my_comments < $min_comments);
+        } else if ( $reviewed_count < $min_comments ) {
+            // User is working toward minimum
+            // Always show submissions they've already commented on, OR submissions that help them reach minimum
+            $should_include = ($my_comments >= 1) || ($my_comments < $min_comments);
         } else if ( $reviewed_count >= $min_comments && $allowall ) {
             // User has met minimum and allowall is checked - show all submissions
             $should_include = true;
+        } else if ( $reviewed_count >= $min_comments && !$allowall ) {
+            // User has met minimum but allowall is not checked - only show submissions they've already reviewed
+            $should_include = ($my_comments >= 1);
         } else {
             // Default: only show submissions where user hasn't reached min_comments
             $should_include = ($my_comments < $min_comments);
@@ -181,6 +187,26 @@ if ( $is_submitted && !$USER->instructor ) {
         if ( $date_cmp != 0 ) return $date_cmp;
         return $a['comment_count'] - $b['comment_count'];
     });
+    
+    // If allowall is not checked and min_comments > 0, limit to min_comments submissions
+    // But always include submissions the user has already commented on
+    if ( !$allowall && $min_comments > 0 ) {
+        // Separate submissions: ones they've started vs ones they haven't
+        $started = array();
+        $not_started = array();
+        foreach ( $submissions_with_counts as $sub ) {
+            if ( $sub['comment_count'] >= 1 ) {
+                $started[] = $sub;
+            } else {
+                $not_started[] = $sub;
+            }
+        }
+        
+        // Combine: all started ones + enough not_started to reach min_comments total
+        $max_to_show = max($min_comments, count($started));
+        $needed_from_not_started = max(0, $max_to_show - count($started));
+        $submissions_with_counts = array_merge($started, array_slice($not_started, 0, $needed_from_not_started));
+    }
     
     // Paginate
     $total_review_count = count($submissions_with_counts);
@@ -623,12 +649,7 @@ if ( U::strlen($inst_note) > 0 ) {
                             <?php if ( $sub['comment_count'] > 0 ) { ?>
                                 <span style="color: #5cb85c; font-size: 0.9em; margin-left: 15px; font-weight: bold;">
                                     ✓ You have <?= $sub['comment_count'] ?> comment<?= $sub['comment_count'] == 1 ? '' : 's' ?>
-                                    <?php if ( $min_comments > 0 ) { ?>
-                                        (<?= $sub['comment_count'] ?>/<?= $min_comments ?> required)
-                                    <?php } ?>
                                 </span>
-                            <?php } else if ( $min_comments > 0 ) { ?>
-                                <span style="color: #666; font-size: 0.9em; margin-left: 15px;">Your comments: 0/<?= $min_comments ?></span>
                             <?php } ?>
                         </div>
                         <div>
