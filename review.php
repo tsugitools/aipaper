@@ -19,17 +19,19 @@ if ( !$review_result_id || !is_numeric($review_result_id) ) {
 }
 $review_result_id = intval($review_result_id);
 
-// Verify current user has submitted their own paper
-$my_result_id = $RESULT->id;
-$my_paper_row = $PDOX->rowDie(
-    "SELECT submitted FROM {$p}aipaper_result WHERE result_id = :RID",
-    array(':RID' => $my_result_id)
-);
+// Verify current user has submitted their own paper (unless instructor)
+if ( !$USER->instructor ) {
+    $my_result_id = $RESULT->id;
+    $my_paper_row = $PDOX->rowDie(
+        "SELECT submitted FROM {$p}aipaper_result WHERE result_id = :RID",
+        array(':RID' => $my_result_id)
+    );
 
-if ( !$my_paper_row || !($my_paper_row['submitted'] == 1 || $my_paper_row['submitted'] == true) ) {
-    $_SESSION['error'] = 'You must submit your own paper before reviewing others';
-    header( 'Location: '.addSession('index.php') ) ;
-    return;
+    if ( !$my_paper_row || !($my_paper_row['submitted'] == 1 || $my_paper_row['submitted'] == true) ) {
+        $_SESSION['error'] = 'You must submit your own paper before reviewing others';
+        header( 'Location: '.addSession('index.php') ) ;
+        return;
+    }
 }
 
 // Verify the submission to review exists and is submitted
@@ -53,8 +55,8 @@ if ( !$review_result ) {
     return;
 }
 
-// Don't allow reviewing your own submission
-if ( $review_result['user_id'] == $USER->id ) {
+// Don't allow students to review their own submission (instructors can review anyone)
+if ( !$USER->instructor && $review_result['user_id'] == $USER->id ) {
     $_SESSION['error'] = 'You cannot review your own submission';
     header( 'Location: '.addSession('index.php') ) ;
     return;
@@ -70,14 +72,18 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
         return;
     }
     
+    // Determine comment type based on user role
+    $comment_type = $USER->instructor ? 'instructor' : 'student';
+    
     // Insert comment
     $PDOX->queryDie(
         "INSERT INTO {$p}aipaper_comment (result_id, user_id, comment_text, comment_type, created_at)
-         VALUES (:RID, :UID, :TEXT, 'student', NOW())",
+         VALUES (:RID, :UID, :TEXT, :TYPE, NOW())",
         array(
             ':RID' => $review_result_id,
             ':UID' => $USER->id,
-            ':TEXT' => $comment_text
+            ':TEXT' => $comment_text,
+            ':TYPE' => $comment_type
         )
     );
     
@@ -131,7 +137,11 @@ $author_name = $use_real_names && !empty($review_result['displayname'])
     : FakeName::getName($review_result['user_id']);
 
 $menu = new \Tsugi\UI\MenuSet();
-$menu->addLeft(__('Back'), 'index.php');
+if ( $USER->instructor ) {
+    $menu->addLeft(__('Back to Grades'), 'grades.php');
+} else {
+    $menu->addLeft(__('Back'), 'index.php');
+}
 
 // Render view
 $OUTPUT->header();

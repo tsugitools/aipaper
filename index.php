@@ -536,12 +536,21 @@ if ( U::strlen($inst_note) > 0 ) {
                         <div>
                             <strong><?= htmlentities($sub['display_name']) ?></strong>
                             <span style="color: #666; font-size: 0.9em; margin-left: 15px;">Submitted: <?= htmlentities($formatted_sub_date) ?></span>
-                            <?php if ( $min_comments > 0 ) { ?>
-                                <span style="color: #666; font-size: 0.9em; margin-left: 15px;">Your comments: <?= $sub['comment_count'] ?>/<?= $min_comments ?></span>
+                            <?php if ( $sub['comment_count'] > 0 ) { ?>
+                                <span style="color: #5cb85c; font-size: 0.9em; margin-left: 15px; font-weight: bold;">
+                                    ✓ You have <?= $sub['comment_count'] ?> comment<?= $sub['comment_count'] == 1 ? '' : 's' ?>
+                                    <?php if ( $min_comments > 0 ) { ?>
+                                        (<?= $sub['comment_count'] ?>/<?= $min_comments ?> required)
+                                    <?php } ?>
+                                </span>
+                            <?php } else if ( $min_comments > 0 ) { ?>
+                                <span style="color: #666; font-size: 0.9em; margin-left: 15px;">Your comments: 0/<?= $min_comments ?></span>
                             <?php } ?>
                         </div>
                         <div>
-                            <a href="review.php?result_id=<?= $sub['result_id'] ?>" class="btn btn-primary btn-sm">Review</a>
+                            <a href="review.php?result_id=<?= $sub['result_id'] ?>" class="btn btn-primary btn-sm">
+                                <?= $sub['comment_count'] > 0 ? 'Review Again' : 'Review' ?>
+                            </a>
                         </div>
                     </div>
                 <?php } ?>

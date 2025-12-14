@@ -175,6 +175,27 @@ $OUTPUT->flashMessages();
 // Show the basic info for this user
 GradeUtil::gradeShowInfo($row, false);
 
+// Get result_id for this user to link to review page
+$p = $CFG->dbprefix;
+$result_row = $PDOX->rowDie(
+    "SELECT result_id FROM {$p}lti_result WHERE user_id = :UID AND link_id = :LID",
+    array(':UID' => $user_id, ':LID' => $LAUNCH->link->id)
+);
+
+if ( $result_row ) {
+    $result_id = $result_row['result_id'];
+    $paper_row = $PDOX->rowDie(
+        "SELECT submitted FROM {$p}aipaper_result WHERE result_id = :RID",
+        array(':RID' => $result_id)
+    );
+    
+    if ( $paper_row && ($paper_row['submitted'] == 1 || $paper_row['submitted'] == true) ) {
+        echo('<p><a href="review.php?result_id='.$result_id.'" class="btn btn-primary">');
+        echo(__('Review Submission'));
+        echo("</a></p>\n");
+    }
+}
+
 if ( U::strlen($content) > 0 ) {
     $next = Table::makeUrl('grade-detail.php', $getparms);
     echo('<p><a href="index.php?user_id='.$user_id.'&next='.urlencode($next).'">');
@@ -209,14 +230,18 @@ echo('</textarea><br/>
 echo('</form>');
 
 // Reset submission button (separate form)
-$p = $CFG->dbprefix;
-$result_row = $PDOX->rowDie(
-    "SELECT result_id FROM {$p}lti_result WHERE user_id = :UID AND link_id = :LID",
-    array(':UID' => $user_id, ':LID' => $LAUNCH->link->id)
-);
+// Reuse result_id from above if available
+if ( !isset($result_id) ) {
+    $result_row = $PDOX->rowDie(
+        "SELECT result_id FROM {$p}lti_result WHERE user_id = :UID AND link_id = :LID",
+        array(':UID' => $user_id, ':LID' => $LAUNCH->link->id)
+    );
+    if ( $result_row ) {
+        $result_id = $result_row['result_id'];
+    }
+}
 
-if ( $result_row ) {
-    $result_id = $result_row['result_id'];
+if ( isset($result_id) ) {
     $paper_row = $PDOX->rowDie(
         "SELECT raw_submission, json FROM {$p}aipaper_result WHERE result_id = :RID",
         array(':RID' => $result_id)
