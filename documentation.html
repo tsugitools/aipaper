@@ -38,7 +38,7 @@ if ( $menu ) {
     <li><strong>Instructor grade points:</strong> Points you will award for the assignment (can be zero)</li>
     <li><strong>Points earned for each comment:</strong> Points students earn per comment on other submissions (can be zero)</li>
     <li><strong>Minimum number of comments per student:</strong> Required comments each student must make (can be zero). If zero, students can comment on any submission.</li>
-    <li><strong>Use actual student names:</strong> Display real names instead of generated names</li>
+    <li><strong>Use actual student names:</strong> When checked, display real names. When unchecked, students see generated names (e.g., "Purple Elephant") and instructors see real names with generated names in parentheses (e.g., "John Doe (Purple Elephant)")</li>
     <li><strong>Allow students to see and comment on all submissions after the minimum has been met:</strong> When checked, students who have met the minimum comment requirement can see and comment on all submissions. When unchecked, they can only see submissions they have already commented on.</li>
     <li><strong>Allow students to reset and resubmit their papers:</strong> Enables the Reset Submission feature. When a student resets, their submission becomes editable again and comments are soft-deleted (hidden from students but visible to instructors).</li>
     <li><strong>Due date:</strong> Optional due date for the assignment</li>
@@ -88,13 +88,36 @@ if ( $menu ) {
 
 <h4>Instructor Features</h4>
 <ul>
-    <li><strong>Student Data:</strong> View all student submissions, grades, and analytics from the Student Data menu</li>
-    <li><strong>Grade Detail:</strong> View individual student details including points, review count, and assign instructor points</li>
-    <li><strong>Review Submission:</strong> Click "Review Submission" from grade detail to view and comment on a student's paper</li>
-    <li><strong>Reset Submission:</strong> Reset a student's submission (soft-deletes comments but keeps paper content)</li>
+    <li><strong>Student Data:</strong> View all student submissions, grades, and analytics from the Student Data menu with:
+        <ul>
+            <li>Pagination (20 students per page)</li>
+            <li>Sortable columns (Name, Email, Grade, Updated, Comments Given, Comments Received, Flags, Deleted Comments)</li>
+            <li>Search by name or email</li>
+            <li>Search by generated name (when "Use actual student names" is unchecked)</li>
+            <li>Default sort by Flags (DESC), then Name (ASC)</li>
+            <li>Flag counts include both flagged comments and flagged submissions</li>
+        </ul>
+    </li>
+    <li><strong>Grade Detail:</strong> View individual student details including:
+        <ul>
+            <li>Points earned / points possible</li>
+            <li>Review count (number of students reviewed)</li>
+            <li>Flag information (flagged comments count and submission flag status, if any)</li>
+            <li>Assign instructor points (integer from 0 to instructor_points)</li>
+            <li>Review Submission button (preserves pagination/sort/search state)</li>
+            <li>Reset Submission button</li>
+        </ul>
+    </li>
+    <li><strong>Review Submission:</strong> Click "Review Submission" from grade detail to view and comment on a student's paper. Navigation context (page, sort, search) is preserved when navigating back.</li>
+    <li><strong>Comment Moderation:</strong> Hide/show individual comments using the trash can icon. Hidden comments are soft-deleted (visible to instructors, hidden from students, still count for points).</li>
+    <li><strong>Flagging:</strong> Flag comments or submissions for review. Anyone can flag; only instructors can unflag. Flagged items are indicated with red flag icons.</li>
     <li><strong>Comments:</strong> All instructor comments are marked as "Staff" and visible to students</li>
-    <li><strong>Soft-Deleted Comments:</strong> When a submission is reset, comments are soft-deleted (visible to instructors with indication, hidden from students)</li>
+    <li><strong>Soft-Deleted Comments:</strong> When a submission is reset or a comment is hidden, comments are soft-deleted (visible to instructors with indication, hidden from students, still count for points)</li>
 </ul>
+
+<h4>Generated Name Search</h4>
+<p>When "Use actual student names" is unchecked, students see generated names (e.g., "Purple Elephant") instead of their real names. Instructors can search for students by their generated name using the "Search by Generated Name" field in the Student Data page. This is useful when you only know a student's generated name.</p>
+<p>Generated name search results appear in the main Student Data table with sorting disabled. The search is mutually exclusive with regular name/email search - entering one clears the other.</p>
 
 <h4>Test Data</h4>
 <p>If your LTI key is '12345', you can access a test data generator from the Instructor menu to create 100 dummy users with submitted papers for testing the review system.</p>

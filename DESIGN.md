@@ -29,6 +29,9 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
 - All comments are visible to all users (no filtering by type in current implementation)
 - Comments are soft-deleted when a submission is reset (hidden from students, visible to instructors with indication)
 - Soft-deleted comments still count for points for the student who made them
+- **Comment Moderation**: Instructors can hide/show individual comments using trash can icon (soft-delete toggle)
+- **Flagging**: Anyone can flag comments or submissions; only instructors can unflag
+- Flagged items are indicated with red flag icons (accessible design with size, bold, border cues for color-blind users)
 
 ### Peer Review Workflow
 
@@ -76,15 +79,24 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
 
 - **Settings**: Configure all assignment settings including points, comment requirements, and visibility options
 - **Instructions Editor**: Edit assignment instructions/rubric using CKEditor
-- **Student Data**: View all student submissions, grades, and analytics
+- **Student Data**: View all student submissions, grades, and analytics with:
+  - Pagination (20 students per page)
+  - Sortable columns (Name, Email, Grade, Updated, Comments Given, Comments Received, Flags, Deleted Comments)
+  - Search by name/email
+  - Search by generated name (when userealnames is false)
+  - Default sort: Flags DESC, then Name ASC
+  - Displays: Comments Given, Comments Received, Flags (includes submission flags), Deleted Comments
 - **Grade Detail**: View individual student details including:
   - Points earned / points possible
   - Review count (number of students reviewed)
+  - Flag information (flagged comments count and submission flag status, if any)
   - Assign instructor points (integer from 0 to instructor_points)
   - Review Submission button (links to review.php)
   - Reset Submission button
 - **Review Interface**: Instructors can review any student submission from grade-detail.php or review.php
 - **Comments**: Instructor comments are marked as "Staff" type
+- **Comment Moderation**: Hide/show individual comments (soft-delete toggle) with trash can icon
+- **Flag Management**: Flag/unflag comments and submissions; view flag counts in Student Data
 
 ### Data Model
 
@@ -95,6 +107,8 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
   - `raw_submission` (TEXT) - original paper submission
   - `ai_enhanced_submission` (TEXT) - AI-enhanced version (optional)
   - `submitted` (TINYINT(1)) - submission status
+  - `flagged` (TINYINT(1)) - flag status
+  - `flagged_by` (INTEGER) - user_id who flagged the submission
   - `json` (TEXT) - additional JSON data
 
 **`aipaper_comment` table:**
@@ -107,6 +121,8 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
   - `comment_type` (ENUM: 'student', 'instructor', 'AI')
   - `created_at` (DATETIME)
   - `deleted` (TINYINT(1)) - soft delete flag
+  - `flagged` (TINYINT(1)) - flag status
+  - `flagged_by` (INTEGER) - user_id who flagged the comment
 
 **Settings stored in `lti_link` settings:**
 - `instructions` - assignment instructions/rubric
@@ -114,7 +130,7 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
 - `instructorpoints` - points instructor can award
 - `commentpoints` - points per comment
 - `mincomments` - minimum comments required
-- `userealnames` - use actual student names
+- `userealnames` - use actual student names (if false, students see generated names, instructors see real names with generated names in parentheses)
 - `allowall` - allow students to see all submissions after minimum met
 - `resubmit` - allow students to reset and resubmit
 - `due_date` - optional due date
@@ -136,11 +152,18 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
 ## Not Yet Implemented
 
 The following features from the original design are not yet implemented:
-- Like capability for comments
-- Flag capability for submissions and comments
+- Like capability for comments (database table exists but not used)
 - AI API integration (automatic AI comment generation on submission)
 - Auto-grading after maximum duration (time-based auto-grade feature)
 - Tabbed dialog interface (currently uses menu-based navigation)
+
+## Recently Implemented Features
+
+- **Flag System**: Comments and submissions can be flagged by anyone; only instructors can unflag. Flagged items are displayed with red flag icons and included in flag counts.
+- **Comment Moderation**: Instructors can hide/show individual comments using trash can icons (soft-delete toggle).
+- **Generated Name Search**: When `userealnames` is false, instructors can search by generated name. Results appear in the main Student Data table with sorting disabled.
+- **Enhanced Student Data Page**: Pagination (20 per page), sortable columns, search by name/email, search by generated name, flag counts, deleted comment counts.
+- **Navigation Context Preservation**: Pagination, sorting, and search state preserved when navigating between grades.php, grade-detail.php, and review.php.
 
 ## Technical Details
 

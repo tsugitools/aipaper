@@ -431,7 +431,7 @@ if ( $LAUNCH->user->instructor ) {
     if ( $key === '12345' ) {
         $submenu->addLink(__('Generate Test Data'), 'testdata.php');
     }
-    $menu->addRight(__('Help'), 'help.php');
+    $menu->addRight(__('Documentation'), 'documentation.html', /* push */ false, 'target="_blank"');
     $menu->addRight(__('Instructor'), $submenu, /* push */ false);
 } else {
     // Add navigation items to menu

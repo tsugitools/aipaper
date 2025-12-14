@@ -13,7 +13,7 @@ $REGISTER_LTI2 = array(
         "English",
     ),
     "source_url" => "https://github.com/tsugitools/aipaper",
-    "documentation" => "help.php",
+    "documentation" => "documentation.html",
     // For now Tsugi tools delegate this to /lti/store
     "placements" => array(
         /*
