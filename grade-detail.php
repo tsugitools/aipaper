@@ -9,6 +9,7 @@ use \Tsugi\UI\Table;
 use \Tsugi\Core\Result;
 use \Tsugi\Core\LTIX;
 use \Tsugi\Grades\GradeUtil;
+use \Tsugi\Util\FakeName;
 
 $LAUNCH = LTIX::requireData();
 
@@ -235,6 +236,33 @@ if ( $result_row ) {
         );
         $submission_flagged = $submission_row && ($submission_row['flagged'] == 1 || $submission_row['flagged'] == true);
     }
+    
+    // Get user info for name display
+    $user_row = $PDOX->rowDie(
+        "SELECT displayname FROM {$p}lti_user WHERE user_id = :UID",
+        array(':UID' => $user_id)
+    );
+    $real_displayname = $user_row ? ($user_row['displayname'] ?? '') : '';
+    $fake_displayname = FakeName::getName($user_id);
+    $use_real_names = Settings::linkGet('userealnames', false);
+    
+    // Determine display name based on setting and user role
+    if ( $use_real_names ) {
+        $display_name = htmlentities($real_displayname);
+    } else {
+        // If userealnames is false: students see fake name, instructors see real name (fake in parentheses)
+        if ( $LAUNCH->user->instructor ) {
+            $display_name = htmlentities($real_displayname);
+            if ( !empty($fake_displayname) ) {
+                $display_name .= ' (' . htmlentities($fake_displayname) . ')';
+            }
+        } else {
+            $display_name = htmlentities($fake_displayname);
+        }
+    }
+    
+    // Display student name
+    echo('<h3>Student: ' . $display_name . '</h3>');
     
     // Display points and review count
     if ( $overall_points > 0 ) {

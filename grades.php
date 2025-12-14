@@ -6,6 +6,8 @@ use \Tsugi\UI\MenuSet;
 use \Tsugi\Grades\GradeUtil;
 use \Tsugi\Core\LTIX;
 use \Tsugi\Util\U;
+use \Tsugi\Util\FakeName;
+use \Tsugi\Core\Settings;
 
 $LAUNCH = LTIX::requireData();
 
@@ -166,9 +168,29 @@ echo '<th>' . renderSortHeader('Deleted Comments', 'deleted_comments', $sort_col
 echo '</tr></thead>';
 echo '<tbody>';
 
+// Get userealnames setting
+$use_real_names = Settings::linkGet('userealnames', false);
+
 foreach ($rows as $row) {
     $user_id = intval($row['user_id']);
-    $displayname = htmlentities($row['displayname'] ?? '');
+    $real_displayname = htmlentities($row['displayname'] ?? '');
+    $fake_displayname = FakeName::getName($user_id);
+    
+    // Determine display name based on setting and user role
+    if ( $use_real_names ) {
+        $displayname = $real_displayname;
+    } else {
+        // If userealnames is false: students see fake name, instructors see real name (fake in parentheses)
+        if ( $LAUNCH->user->instructor ) {
+            $displayname = $real_displayname;
+            if ( !empty($fake_displayname) ) {
+                $displayname .= ' (' . htmlentities($fake_displayname) . ')';
+            }
+        } else {
+            $displayname = htmlentities($fake_displayname);
+        }
+    }
+    
     $email = htmlentities($row['email'] ?? '');
     $grade = isset($row['grade']) ? number_format(floatval($row['grade']) * 100.0, 1) . '%' : '0.0%';
     $updated_at = htmlentities($row['updated_at'] ?? '');

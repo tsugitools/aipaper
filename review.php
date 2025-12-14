@@ -359,10 +359,22 @@ foreach ( $comment_rows as $comment_row ) {
         $comment['display_name'] = 'Staff';
     } else {
         // Student comment
-        if ( $use_real_names && !empty($comment_row['displayname']) ) {
-            $comment['display_name'] = $comment_row['displayname'];
+        if ( $use_real_names ) {
+            $comment['display_name'] = !empty($comment_row['displayname']) 
+                ? $comment_row['displayname'] 
+                : FakeName::getName($comment_row['user_id']);
         } else {
-            $comment['display_name'] = FakeName::getName($comment_row['user_id']);
+            // If userealnames is false: students see fake name, instructors see real name (fake in parentheses)
+            if ( $USER->instructor ) {
+                $real_name = !empty($comment_row['displayname']) ? $comment_row['displayname'] : '';
+                $fake_name = FakeName::getName($comment_row['user_id']);
+                $comment['display_name'] = $real_name;
+                if ( !empty($fake_name) ) {
+                    $comment['display_name'] .= ' (' . $fake_name . ')';
+                }
+            } else {
+                $comment['display_name'] = FakeName::getName($comment_row['user_id']);
+            }
         }
     }
     
@@ -370,9 +382,22 @@ foreach ( $comment_rows as $comment_row ) {
 }
 
 // Get display name for the submission author
-$author_name = $use_real_names && !empty($review_result['displayname']) 
-    ? $review_result['displayname'] 
-    : FakeName::getName($review_result['user_id']);
+// If userealnames is false: students see fake name, instructors see real name (fake in parentheses)
+if ( $use_real_names ) {
+    $author_name = !empty($review_result['displayname']) 
+        ? $review_result['displayname'] 
+        : FakeName::getName($review_result['user_id']);
+} else {
+    if ( $USER->instructor ) {
+        $author_name = !empty($review_result['displayname']) ? $review_result['displayname'] : '';
+        $fake_name = FakeName::getName($review_result['user_id']);
+        if ( !empty($fake_name) ) {
+            $author_name .= ' (' . $fake_name . ')';
+        }
+    } else {
+        $author_name = FakeName::getName($review_result['user_id']);
+    }
+}
 
 // review_page is already set above
 
