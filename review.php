@@ -70,6 +70,49 @@ if ( !$USER->instructor && $review_result['user_id'] == $USER->id ) {
     return;
 }
 
+// Handle toggle comment (soft delete/un-delete)
+if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor ) {
+    $comment_id = intval($_POST['toggle_comment']);
+    $new_deleted = intval($_POST['comment_deleted']);
+    
+    // Get review_page and from parameters to preserve navigation
+    $review_page = U::get($_POST, 'review_page', U::get($_GET, 'review_page', ''));
+    $from_page = U::get($_POST, 'from', U::get($_GET, 'from', ''));
+    $from_user_id = U::get($_POST, 'user_id', U::get($_GET, 'user_id', ''));
+    
+    // Verify comment exists and belongs to this link
+    $comment_check = $PDOX->rowDie(
+        "SELECT c.comment_id 
+         FROM {$p}aipaper_comment c
+         INNER JOIN {$p}lti_result r ON c.result_id = r.result_id
+         WHERE c.comment_id = :CID AND r.link_id = :LID",
+        array(':CID' => $comment_id, ':LID' => $LAUNCH->link->id)
+    );
+    
+    if ( $comment_check ) {
+        $PDOX->queryDie(
+            "UPDATE {$p}aipaper_comment 
+             SET deleted = :DELETED, updated_at = NOW()
+             WHERE comment_id = :CID",
+            array(':DELETED' => $new_deleted, ':CID' => $comment_id)
+        );
+        $_SESSION['success'] = $new_deleted ? 'Comment hidden' : 'Comment shown';
+    } else {
+        $_SESSION['error'] = 'Comment not found';
+    }
+    
+    // Redirect back to review.php with preserved parameters
+    $redirect_url = 'review.php?result_id='.$review_result_id;
+    if ( !empty($review_page) ) {
+        $redirect_url .= '&review_page=' . intval($review_page);
+    }
+    if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
+        $redirect_url .= '&from=grade-detail&user_id=' . urlencode($from_user_id);
+    }
+    header( 'Location: '.addSession($redirect_url) ) ;
+    return;
+}
+
 // Handle comment submission
 if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
     // Get review_page from POST (form) or GET (URL)
@@ -273,13 +316,29 @@ $OUTPUT->welcomeUserCourse();
                 $comment_date = new DateTime($comment['created_at']);
                 $formatted_date = $comment_date->format('M j, Y g:i A');
             ?>
-                <div class="comment-item" style="background-color: <?= isset($comment['deleted']) && $comment['deleted'] ? '#ffe6e6' : '#f9f9f9' ?>;">
+                <div class="comment-item" id="comment-<?= $comment['comment_id'] ?>" style="background-color: <?= isset($comment['deleted']) && $comment['deleted'] ? '#ffe6e6' : '#f9f9f9' ?>;">
                     <div style="margin-bottom: 10px;">
                         <span class="label <?= $badge_class ?>" style="margin-right: 8px;"><?= htmlentities($badge_text) ?></span>
                         <strong><?= htmlentities($comment['display_name']) ?></strong>
                         <span style="color: #666; font-size: 0.9em; margin-left: 10px;"><?= htmlentities($formatted_date) ?></span>
                         <?php if ( isset($comment['deleted']) && $comment['deleted'] ) { ?>
                             <span class="label label-warning" style="margin-left: 10px;">Soft Deleted</span>
+                        <?php } ?>
+                        <?php if ( $USER->instructor ) { ?>
+                            <form method="post" style="display: inline;" onsubmit="return confirm('<?= isset($comment['deleted']) && $comment['deleted'] ? 'Un-hide' : 'Hide' ?> this comment?');">
+                                <input type="hidden" name="toggle_comment" value="<?= $comment['comment_id'] ?>">
+                                <input type="hidden" name="comment_deleted" value="<?= isset($comment['deleted']) && $comment['deleted'] ? '0' : '1' ?>">
+                                <?php if ( !empty($review_page) ) { ?>
+                                    <input type="hidden" name="review_page" value="<?= htmlentities($review_page) ?>">
+                                <?php } ?>
+                                <?php if ( $from_page == 'grade-detail' && !empty($from_user_id) ) { ?>
+                                    <input type="hidden" name="from" value="grade-detail">
+                                    <input type="hidden" name="user_id" value="<?= htmlentities($from_user_id) ?>">
+                                <?php } ?>
+                                <button type="submit" class="btn btn-xs btn-default" style="margin-left: 10px;">
+                                    <?= isset($comment['deleted']) && $comment['deleted'] ? 'Show' : 'Hide' ?>
+                                </button>
+                            </form>
                         <?php } ?>
                     </div>
                     <div class="comment-text" style="line-height: 1.6;">

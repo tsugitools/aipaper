@@ -281,6 +281,36 @@ if ( $is_submitted ) {
 // Load instructions from settings
 $instructions = Settings::linkGet('instructions', '');
 
+// Handle toggle comment (soft delete/un-delete)
+if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor ) {
+    $comment_id = intval($_POST['toggle_comment']);
+    $new_deleted = intval($_POST['comment_deleted']);
+    
+    // Verify comment exists and belongs to this link
+    $comment_check = $PDOX->rowDie(
+        "SELECT c.comment_id 
+         FROM {$p}aipaper_comment c
+         INNER JOIN {$p}lti_result r ON c.result_id = r.result_id
+         WHERE c.comment_id = :CID AND r.link_id = :LID",
+        array(':CID' => $comment_id, ':LID' => $LAUNCH->link->id)
+    );
+    
+    if ( $comment_check ) {
+        $PDOX->queryDie(
+            "UPDATE {$p}aipaper_comment 
+             SET deleted = :DELETED, updated_at = NOW()
+             WHERE comment_id = :CID",
+            array(':DELETED' => $new_deleted, ':CID' => $comment_id)
+        );
+        $_SESSION['success'] = $new_deleted ? 'Comment hidden' : 'Comment shown';
+    } else {
+        $_SESSION['error'] = 'Comment not found';
+    }
+    
+    header( 'Location: '.addSession('index.php') ) ;
+    return;
+}
+
 // Handle reset submission
 if ( count($_POST) > 0 && isset($_POST['reset_submission']) ) {
     // Allow reset if instructor, or if resubmit is allowed, or if submission has been submitted
@@ -583,13 +613,22 @@ if ( U::strlen($inst_note) > 0 ) {
                             $comment_date = new DateTime($comment['created_at']);
                             $formatted_date = $comment_date->format('M j, Y g:i A');
                         ?>
-                            <div class="comment-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: <?= isset($comment['deleted']) && $comment['deleted'] ? '#ffe6e6' : '#f9f9f9' ?>;">
+                            <div class="comment-item" id="comment-<?= $comment['comment_id'] ?>" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: <?= isset($comment['deleted']) && $comment['deleted'] ? '#ffe6e6' : '#f9f9f9' ?>;">
                                 <div style="margin-bottom: 10px;">
                                     <span class="label <?= $badge_class ?>" style="margin-right: 8px;"><?= htmlentities($badge_text) ?></span>
                                     <strong><?= htmlentities($comment['display_name']) ?></strong>
                                     <span style="color: #666; font-size: 0.9em; margin-left: 10px;"><?= htmlentities($formatted_date) ?></span>
                                     <?php if ( isset($comment['deleted']) && $comment['deleted'] ) { ?>
                                         <span class="label label-warning" style="margin-left: 10px;">Soft Deleted</span>
+                                    <?php } ?>
+                                    <?php if ( $USER->instructor ) { ?>
+                                        <form method="post" style="display: inline;" onsubmit="return confirm('<?= isset($comment['deleted']) && $comment['deleted'] ? 'Un-hide' : 'Hide' ?> this comment?');">
+                                            <input type="hidden" name="toggle_comment" value="<?= $comment['comment_id'] ?>">
+                                            <input type="hidden" name="comment_deleted" value="<?= isset($comment['deleted']) && $comment['deleted'] ? '0' : '1' ?>">
+                                            <button type="submit" class="btn btn-xs btn-default" style="margin-left: 10px;">
+                                                <?= isset($comment['deleted']) && $comment['deleted'] ? 'Show' : 'Hide' ?>
+                                            </button>
+                                        </form>
                                     <?php } ?>
                                 </div>
                                 <div class="comment-text" style="line-height: 1.6;">
