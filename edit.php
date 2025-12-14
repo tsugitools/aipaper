@@ -27,7 +27,7 @@ if ( ! $result_id ) {
 
 // Load or create aipaper_result record
 $paper_row = $PDOX->rowDie(
-    "SELECT raw_submission, ai_enhanced_submission, student_comment, flagged, flagged_by
+    "SELECT raw_submission, ai_enhanced_submission, flagged, flagged_by
      FROM {$p}aipaper_result WHERE result_id = :RID",
     array(':RID' => $result_id)
 );
@@ -41,7 +41,6 @@ if ( $paper_row === false ) {
     $paper_row = array(
         'raw_submission' => '',
         'ai_enhanced_submission' => '',
-        'student_comment' => '',
         'flagged' => false,
         'flagged_by' => null
     );
@@ -67,7 +66,6 @@ if ( count($_POST) > 0 && isset($_POST['submit_paper']) ) {
 
     $raw_submission = U::get($_POST, 'raw_submission', '');
     $ai_enhanced = U::get($_POST, 'ai_enhanced_submission', '');
-    $student_comment = U::get($_POST, 'student_comment', '');
     
     // For instructors, save instructions
     if ( $USER->instructor ) {
@@ -79,12 +77,11 @@ if ( count($_POST) > 0 && isset($_POST['submit_paper']) ) {
     $PDOX->queryDie(
         "UPDATE {$p}aipaper_result 
          SET raw_submission = :RAW, ai_enhanced_submission = :AI, 
-             student_comment = :COMMENT, updated_at = NOW()
+             updated_at = NOW()
          WHERE result_id = :RID",
         array(
             ':RAW' => $raw_submission,
             ':AI' => $ai_enhanced,
-            ':COMMENT' => $student_comment,
             ':RID' => $result_id
         )
     );

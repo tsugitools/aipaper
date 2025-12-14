@@ -41,7 +41,7 @@ if ( ! $result_id ) {
 
 // Load or create aipaper_result record
 $paper_row = $PDOX->rowDie(
-    "SELECT raw_submission, ai_enhanced_submission, student_comment, submitted, flagged, flagged_by, json
+    "SELECT raw_submission, ai_enhanced_submission, submitted, flagged, flagged_by, json
      FROM {$p}aipaper_result WHERE result_id = :RID",
     array(':RID' => $result_id)
 );
@@ -55,7 +55,6 @@ if ( $paper_row === false ) {
     $paper_row = array(
         'raw_submission' => '',
         'ai_enhanced_submission' => '',
-        'student_comment' => '',
         'submitted' => false,
         'flagged' => false,
         'flagged_by' => null,
@@ -331,7 +330,6 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
 
     $raw_submission = U::get($_POST, 'raw_submission', '');
     $ai_enhanced = U::get($_POST, 'ai_enhanced_submission', '');
-    $student_comment = U::get($_POST, 'student_comment', '');
     
     // Validate that paper is not blank when submitting (not when saving draft)
     if ( $is_submit && !$USER->instructor && U::isEmpty($raw_submission) ) {
@@ -360,12 +358,11 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
     $PDOX->queryDie(
         "UPDATE {$p}aipaper_result 
          SET raw_submission = :RAW, ai_enhanced_submission = :AI, 
-             student_comment = :COMMENT, submitted = :SUBMITTED, updated_at = NOW()
+             submitted = :SUBMITTED, updated_at = NOW()
          WHERE result_id = :RID",
         array(
             ':RAW' => $raw_submission,
             ':AI' => $ai_enhanced,
-            ':COMMENT' => $student_comment,
             ':SUBMITTED' => $new_submitted ? 1 : 0,
             ':RID' => $result_id
         )

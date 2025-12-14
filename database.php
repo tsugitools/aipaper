@@ -21,7 +21,6 @@ array( "{$CFG->dbprefix}aipaper_result",
     result_id    INTEGER NOT NULL,
     raw_submission TEXT NULL,
     ai_enhanced_submission TEXT NULL,
-    student_comment TEXT NULL,
     submitted    TINYINT(1) NOT NULL DEFAULT 0,
     flagged      TINYINT(1) NOT NULL DEFAULT 0,
     flagged_by   INTEGER NULL,  -- user_id who flagged this submission

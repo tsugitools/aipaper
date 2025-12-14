@@ -8,7 +8,6 @@ This tool is designed to collect and grade short papers that were written with t
 - **Paper Submission**: Students create papers using CKEditor 5.0 with support for:
   - Original paper submission
   - AI-enhanced paper (optional)
-  - Student comments/reflection (optional)
   - Assignment instructions/rubric (editable by instructor)
 
 - **Comment Streams**: Feedback is provided through comment streams with:
