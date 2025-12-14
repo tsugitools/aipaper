@@ -1,6 +1,7 @@
 <?php
 require_once "../config.php";
 require_once "points-util.php";
+require_once "ai-util.php";
 
 use \Tsugi\Util\U;
 use \Tsugi\Util\FakeName;
@@ -397,6 +398,49 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
             ':RID' => $result_id
         )
     );
+    
+    // Generate AI comment if paper was just submitted (first time or resubmission)
+    // Note: On resubmission, previous comments (including AI) are soft-deleted, so we need a new AI comment
+    // Generate whenever Submit button is clicked (not Save) and paper is not empty
+    if ( $is_submit && U::isNotEmpty($raw_submission) ) {
+        $instructions = Settings::linkGet('instructions', '');
+        // Auto-use test endpoint if key is '12345' and no API URL is configured
+        $ai_api_url = Settings::linkGet('ai_api_url', '');
+        $key = $LAUNCH->key->key ?? '';
+        if ( empty($ai_api_url) && $key === '12345' ) {
+            // Construct URL using current script's directory (no hardcoded paths)
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            // Get directory of current script (index.php) - this gives us the script's path
+            $script_dir = dirname($_SERVER['SCRIPT_NAME']);
+            $ai_api_url = $protocol . $host . $script_dir . '/ai-test.php';
+        }
+        // Only pass URL if it's not empty, otherwise let function use test endpoint
+        if ( !empty($ai_api_url) ) {
+            $ai_result = generateAIComment($instructions, $raw_submission, $ai_api_url);
+        } else {
+            $ai_result = generateAIComment($instructions, $raw_submission);
+        }
+        
+        if ( $ai_result['success'] ) {
+            // Insert AI comment (user_id is NULL for AI comments)
+            $PDOX->queryDie(
+                "INSERT INTO {$p}aipaper_comment (result_id, user_id, comment_text, comment_type, created_at)
+                 VALUES (:RID, NULL, :TEXT, 'AI', NOW())",
+                array(
+                    ':RID' => $result_id,
+                    ':TEXT' => $ai_result['comment']
+                )
+            );
+            $user_id = $LAUNCH->user->id ?? 'unknown';
+            $user_email = $LAUNCH->user->email ?? 'unknown';
+            error_log("AI Comment: Comment successfully added to database - result_id: {$result_id}, user_id: {$user_id}, email: {$user_email}, comment_length: " . strlen($ai_result['comment']));
+        } else {
+            // Log error but don't fail submission
+            $user_id = $LAUNCH->user->id ?? 'unknown';
+            error_log("AI Comment: Generation failed - result_id: {$result_id}, user_id: {$user_id}, error: " . ($ai_result['error'] ?? 'Unknown error'));
+        }
+    }
 
     if ( $USER->instructor ) {
         $_SESSION['success'] = 'Instructions updated';
@@ -473,6 +517,8 @@ if ( $USER->instructor ) {
     SettingsForm::text('commentpoints', __('Points earned for each comment (can be zero)'));
     SettingsForm::text('instructorpoints', __('Instructor grade points (can be zero)'));
     SettingsForm::note(__('overall_points = instructor_points + submit_points + (comment_points * min_comments). Grades will only be sent for this activity if overall_points > 0.'));
+    SettingsForm::text('ai_api_url', __('AI API URL (optional) - endpoint for generating AI comments. Leave empty to use test endpoint.'));
+    SettingsForm::text('ai_api_key', __('AI API Key (optional) - authentication key for AI API'));
     SettingsForm::checkbox('userealnames', __('Use actual student names instead of generated names'));
     SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
     SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
