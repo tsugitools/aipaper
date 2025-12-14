@@ -1,35 +1,78 @@
-<?php
-require_once "../config.php";
-
-use \Tsugi\Core\LTIX;
-
-// Try to get LTI session, but don't require it
-$LAUNCH = LTIX::session_start();
-$has_session = false;
-$is_instructor = false;
-
-if ( $LAUNCH && isset($LAUNCH->user) && isset($LAUNCH->context) && isset($LAUNCH->link) ) {
-    $has_session = true;
-    $is_instructor = isset($LAUNCH->user->instructor) && $LAUNCH->user->instructor;
-}
-
-$menu = false;
-if ( $has_session ) {
-    $menu = new \Tsugi\UI\MenuSet();
-    $menu->addLeft(__('Back'), 'index.php');
-}
-
-// Render view
-$OUTPUT->header();
-$OUTPUT->bodyStart();
-if ( $menu ) {
-    $OUTPUT->topNav($menu);
-    $OUTPUT->flashMessages();
-    $OUTPUT->welcomeUserCourse();
-}
-
-?>
-<h2>MiniPaper Tool - Instructor Guide</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniPaper Tool - Documentation</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            padding: 20px 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px 40px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        h4 {
+            color: #34495e;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+        ul {
+            margin-bottom: 20px;
+            padding-left: 25px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        strong {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: "Courier New", monospace;
+            font-size: 0.9em;
+            color: #c7254e;
+        }
+        .container ul ul {
+            margin-top: 10px;
+            margin-bottom: 15px;
+        }
+        .container ul ul li {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>AI MiniPaper Tool - Instructor Guide</h2>
+        
+        <p>The AI MiniPaper Tool is designed to collect and grade short papers written with AI assistance. Students submit papers using CKEditor 5.0, with feedback provided through comment streams. The tool supports instructor grading, peer review comments, flagging for moderation, and comprehensive student analytics. This guide covers all the features and settings available to instructors.</p>
 
 <h4>Settings</h4>
 <p>Configure the assignment settings including:</p>
@@ -122,13 +165,6 @@ if ( $menu ) {
 <h4>Test Data</h4>
 <p>If your LTI key is '12345', you can access a test data generator from the Instructor menu to create 100 dummy users with submitted papers for testing the review system.</p>
 
-<?php
-if ( !$has_session ) {
-    ?>
-    <p><em>Note: This help page is publicly accessible. To use the tool, you need to access it through your learning management system.</em></p>
-    <?php
-}
-
-$OUTPUT->footerStart();
-$OUTPUT->footerEnd();
-
+    </div>
+</body>
+</html>
