@@ -477,41 +477,34 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
     // Generate whenever Submit button is clicked (not Save) and paper is not empty
     if ( $is_submit && U::isNotEmpty($raw_submission) ) {
         $instructions = Settings::linkGet('instructions', '');
-        // Auto-use test endpoint if key is '12345' and no API URL is configured
-        $ai_api_url = Settings::linkGet('ai_api_url', '');
-        $key = $LAUNCH->key->key ?? '';
-        if ( empty($ai_api_url) && $key === '12345' ) {
-            // Construct URL using current script's directory (no hardcoded paths)
-            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-            // Get directory of current script (index.php) - this gives us the script's path
-            $script_dir = dirname($_SERVER['SCRIPT_NAME']);
-            $ai_api_url = $protocol . $host . $script_dir . '/ai-test.php';
-        }
-        // Only pass URL if it's not empty, otherwise let function use test endpoint
-        if ( !empty($ai_api_url) ) {
-            $ai_result = generateAIComment($instructions, $raw_submission, $ai_api_url);
-        } else {
-            $ai_result = generateAIComment($instructions, $raw_submission);
-        }
+        $api_info = getAIApiUrl();
         
-        if ( $ai_result['success'] ) {
-            // Insert AI comment (user_id is NULL for AI comments)
-            $PDOX->queryDie(
-                "INSERT INTO {$p}aipaper_comment (result_id, user_id, comment_text, comment_type, created_at)
-                 VALUES (:RID, NULL, :TEXT, 'AI', NOW())",
-                array(
-                    ':RID' => $result_id,
-                    ':TEXT' => $ai_result['comment']
-                )
-            );
-            $user_id = $LAUNCH->user->id ?? 'unknown';
-            $user_email = $LAUNCH->user->email ?? 'unknown';
-            error_log("AI Comment: Comment successfully added to database - result_id: {$result_id}, user_id: {$user_id}, email: {$user_email}, comment_length: " . strlen($ai_result['comment']));
-        } else {
-            // Log error but don't fail submission
-            $user_id = $LAUNCH->user->id ?? 'unknown';
-            error_log("AI Comment: Generation failed - result_id: {$result_id}, user_id: {$user_id}, error: " . ($ai_result['error'] ?? 'Unknown error'));
+        // Only generate AI comment if AI is configured
+        if ( $api_info['configured'] ) {
+            // Pass URL if available, otherwise let function use test endpoint
+            $ai_result = generateAIComment($instructions, $raw_submission, $api_info['url']);
+            
+            if ( $ai_result['success'] ) {
+                // Insert AI comment (user_id is NULL for AI comments)
+                $PDOX->queryDie(
+                    "INSERT INTO {$p}aipaper_comment (result_id, user_id, comment_text, comment_type, created_at)
+                     VALUES (:RID, NULL, :TEXT, 'AI', NOW())",
+                    array(
+                        ':RID' => $result_id,
+                        ':TEXT' => $ai_result['comment']
+                    )
+                );
+                $user_id = $LAUNCH->user->id ?? 'unknown';
+                $user_email = $LAUNCH->user->email ?? 'unknown';
+                error_log("AI Comment: Comment successfully added to database - result_id: {$result_id}, user_id: {$user_id}, email: {$user_email}, comment_length: " . strlen($ai_result['comment']));
+            } else {
+                // Log error but don't fail submission
+                $user_id = $LAUNCH->user->id ?? 'unknown';
+                error_log("AI Comment: Generation failed - result_id: {$result_id}, user_id: {$user_id}, error: " . ($ai_result['error'] ?? 'Unknown error'));
+            }
+            
+            // TEMPORARY: Sleep to see the overlay
+            sleep(5);
         }
     }
 
@@ -890,11 +883,60 @@ if ( U::strlen($inst_note) > 0 ) {
     <!-- Hidden submit button for reset -->
     <input type="submit" name="reset_submission" id="hidden-reset-btn" style="display: none;">
     </form>
+    
+    <!-- Spinner overlay for AI submission -->
+    <div id="submit-spinner-overlay">
+        <div class="spinner-container">
+            <div class="spinner-border" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <p style="margin-top: 20px; font-size: 16px; color: #333;">Submitting paper and generating AI feedback...</p>
+        </div>
+    </div>
 <?php } ?>
 
 <?php
 $OUTPUT->footerStart();
 ?>
+<style>
+#submit-spinner-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+#submit-spinner-overlay .spinner-container {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+#submit-spinner-overlay .spinner-border {
+    width: 3rem;
+    height: 3rem;
+    border: 0.3em solid #337ab7;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border 0.75s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spinner-border {
+    to {
+        transform: rotate(360deg);
+    }
+}
+</style>
 <script src="https://cdn.jsdelivr.net/gh/jitbit/HtmlSanitizer@master/HtmlSanitizer.js"></script>
 <script src="https://cdn.ckeditor.com/ckeditor5/16.0.0/classic/ckeditor.js"></script>
 <script type="text/javascript">
@@ -918,6 +960,19 @@ ClassicEditor.defaultConfig = {
 };
 
 var editors = {};
+var spinnerTimeout = null;
+
+// Helper function to show spinner overlay after 1 second delay
+function showSpinnerOverlay() {
+    // Clear any existing timeout
+    if ( spinnerTimeout ) {
+        clearTimeout(spinnerTimeout);
+    }
+    // Show spinner after 1 second (in case AI responds quickly)
+    spinnerTimeout = setTimeout(function() {
+        $('#submit-spinner-overlay').css('display', 'flex');
+    }, 1000);
+}
 
 $(document).ready( function () {
     <?php if ( $USER->instructor ) { ?>
@@ -1060,6 +1115,10 @@ $(document).ready( function () {
                         return;
                     }
                 <?php } ?>
+                <?php if ( isAIConfigured() ) { ?>
+                    // Show spinner overlay after 2 second delay (only if AI is configured)
+                    showSpinnerOverlay();
+                <?php } ?>
                 // Update form fields with editor content before submitting
                 if ( editors['submission'] ) {
                     $('#editor_submission').val(editors['submission'].getData());
@@ -1116,6 +1175,16 @@ $(document).ready( function () {
                 // Allow reset to proceed without updating editors
                 return true;
             }
+            // Check if this is a submit (not save) - show spinner if not already shown and AI is configured
+            var isSubmit = $(document.activeElement).attr('name') === 'submit_paper' || 
+                          ($(e.originalEvent?.submitter).length > 0 && $(e.originalEvent?.submitter).attr('name') === 'submit_paper') ||
+                          $('#hidden-submit-btn').is(':focus');
+            <?php if ( isAIConfigured() ) { ?>
+                if ( isSubmit && !$('#submit-spinner-overlay').is(':visible') ) {
+                    // Show spinner after 2 second delay (fallback) - only if AI is configured
+                    showSpinnerOverlay();
+                }
+            <?php } ?>
             // Update form fields with editor content
             if ( editors['submission'] ) {
                 $('#editor_submission').val(editors['submission'].getData());
@@ -1125,6 +1194,24 @@ $(document).ready( function () {
             }
         <?php } ?>
     });
+    
+    // Handle Submit button click (direct button, not menu)
+    $('input[name="submit_paper"]').on('click', function(e) {
+        <?php if ( !$USER->instructor && $can_edit ) { ?>
+            <?php if ( isAIConfigured() ) { ?>
+                // Show spinner overlay after 2 second delay (only if AI is configured)
+                showSpinnerOverlay();
+            <?php } ?>
+            // Update form fields with editor content before submitting
+            if ( editors['submission'] ) {
+                $('#editor_submission').val(editors['submission'].getData());
+            }
+            if ( editors['ai_enhanced'] ) {
+                $('#editor_ai_enhanced').val(editors['ai_enhanced'].getData());
+            }
+        <?php } ?>
+    });
+    
     
     // Handle Save button click
     $('input[name="save_paper"]').on('click', function(e) {

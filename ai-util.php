@@ -6,6 +6,43 @@
 use \Tsugi\Core\Settings;
 
 /**
+ * Get the AI API URL, handling special case for key '12345'
+ * @return array Array with 'url' (string|null) and 'configured' (bool)
+ */
+function getAIApiUrl() {
+    global $LAUNCH;
+    
+    $ai_api_url = Settings::linkGet('ai_api_url', '');
+    $key = $LAUNCH->key->key ?? '';
+    
+    // Auto-use test endpoint if key is '12345' and no API URL is configured
+    if ( empty($ai_api_url) && $key === '12345' ) {
+        // Construct URL using current script's directory (no hardcoded paths)
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        // Get directory of current script - use SCRIPT_NAME to get the path
+        $script_dir = dirname($_SERVER['SCRIPT_NAME']);
+        $ai_api_url = $protocol . $host . $script_dir . '/ai-test.php';
+    }
+    
+    $configured = !empty($ai_api_url) || $key === '12345';
+    
+    return array(
+        'url' => !empty($ai_api_url) ? $ai_api_url : null,
+        'configured' => $configured
+    );
+}
+
+/**
+ * Check if AI is configured (has API URL or key is '12345')
+ * @return bool True if AI is configured
+ */
+function isAIConfigured() {
+    $api_info = getAIApiUrl();
+    return $api_info['configured'];
+}
+
+/**
  * Generate AI comment by calling AI API with instructions and paper
  * @param string $instructions Assignment instructions/rubric
  * @param string $paper_text The student's paper text
