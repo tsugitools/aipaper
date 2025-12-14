@@ -219,6 +219,23 @@ if ( $result_row ) {
     $min_comments = Settings::linkGet('mincomments', 0);
     $min_comments = intval($min_comments);
     
+    // Count flagged comments for this student
+    $flagged_comments_row = $PDOX->rowDie(
+        "SELECT COUNT(*) as cnt FROM {$p}aipaper_comment WHERE user_id = :UID AND flagged = 1",
+        array(':UID' => $user_id)
+    );
+    $flagged_comments_count = $flagged_comments_row ? intval($flagged_comments_row['cnt']) : 0;
+    
+    // Check if submission is flagged
+    $submission_flagged = false;
+    if ( $result_id ) {
+        $submission_row = $PDOX->rowDie(
+            "SELECT flagged FROM {$p}aipaper_result WHERE result_id = :RID",
+            array(':RID' => $result_id)
+        );
+        $submission_flagged = $submission_row && ($submission_row['flagged'] == 1 || $submission_row['flagged'] == true);
+    }
+    
     // Display points and review count
     if ( $overall_points > 0 ) {
         echo('<p><strong>Points:</strong> '.$earned_points.'/'.$overall_points.'</p>');
@@ -232,6 +249,20 @@ if ( $result_row ) {
         echo($reviewed_count);
     }
     echo('</p>');
+    
+    // Display flag information if any flags exist
+    if ( $flagged_comments_count > 0 || $submission_flagged ) {
+        echo('<p style="color: #d9534f;"><strong>Flags:</strong> ');
+        $flag_parts = array();
+        if ( $flagged_comments_count > 0 ) {
+            $flag_parts[] = $flagged_comments_count . ' flagged comment' . ($flagged_comments_count == 1 ? '' : 's');
+        }
+        if ( $submission_flagged ) {
+            $flag_parts[] = 'submission flagged';
+        }
+        echo(implode(', ', $flag_parts));
+        echo('</p>');
+    }
     
     if ( $paper_row && ($paper_row['submitted'] == 1 || $paper_row['submitted'] == true) ) {
         // Preserve pagination and sorting when linking to review.php

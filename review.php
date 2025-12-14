@@ -51,7 +51,8 @@ if ( !$USER->instructor ) {
 $review_result = $PDOX->rowDie(
     "SELECT r.result_id, r.user_id, r.created_at,
             u.displayname, u.email,
-            ar.raw_submission, ar.ai_enhanced_submission, ar.submitted
+            ar.raw_submission, ar.ai_enhanced_submission, ar.submitted,
+            ar.flagged, ar.flagged_by
      FROM {$p}lti_result r
      INNER JOIN {$p}lti_user u ON r.user_id = u.user_id
      INNER JOIN {$p}aipaper_result ar ON r.result_id = ar.result_id
@@ -72,6 +73,65 @@ if ( !$review_result ) {
 if ( !$USER->instructor && $review_result['user_id'] == $USER->id ) {
     $_SESSION['error'] = 'You cannot review your own submission';
     header( 'Location: '.addSession('index.php') ) ;
+    return;
+}
+
+// Handle toggle submission flag
+if ( count($_POST) > 0 && isset($_POST['toggle_submission_flag']) ) {
+    // Get navigation parameters
+    $review_page = U::get($_POST, 'review_page', U::get($_GET, 'review_page', ''));
+    $from_page = U::get($_POST, 'from', U::get($_GET, 'from', ''));
+    $from_user_id = U::get($_POST, 'user_id', U::get($_GET, 'user_id', ''));
+    $grades_page = U::get($_POST, 'page', U::get($_GET, 'page', ''));
+    $grades_sort = U::get($_POST, 'sort', U::get($_GET, 'sort', ''));
+    $grades_dir = U::get($_POST, 'dir', U::get($_GET, 'dir', ''));
+    
+    $new_flagged = intval($_POST['submission_flagged']);
+    
+    // Verify submission exists and belongs to this link
+    $submission_check = $PDOX->rowDie(
+        "SELECT ar.result_id, ar.flagged
+         FROM {$p}aipaper_result ar
+         INNER JOIN {$p}lti_result r ON ar.result_id = r.result_id
+         WHERE ar.result_id = :RID AND r.link_id = :LID",
+        array(':RID' => $review_result_id, ':LID' => $LAUNCH->link->id)
+    );
+    
+    if ( $submission_check ) {
+        // Anyone can flag, but only instructors can unflag
+        if ( $new_flagged == 1 || $USER->instructor ) {
+            $flagged_by = $new_flagged == 1 ? $USER->id : null;
+            $PDOX->queryDie(
+                "UPDATE {$p}aipaper_result 
+                 SET flagged = :FLAGGED, flagged_by = :FLAGGED_BY, updated_at = NOW()
+                 WHERE result_id = :RID",
+                array(
+                    ':FLAGGED' => $new_flagged,
+                    ':FLAGGED_BY' => $flagged_by,
+                    ':RID' => $review_result_id
+                )
+            );
+            $_SESSION['success'] = $new_flagged ? 'Submission flagged' : 'Submission unflagged';
+        } else {
+            $_SESSION['error'] = 'Only instructors can unflag submissions';
+        }
+    } else {
+        $_SESSION['error'] = 'Submission not found';
+    }
+    
+    // Redirect back to review.php with preserved parameters
+    $redirect_params = array('result_id' => $review_result_id);
+    if ( !empty($review_page) ) {
+        $redirect_params['review_page'] = intval($review_page);
+    }
+    if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
+        $redirect_params['from'] = 'grade-detail';
+        $redirect_params['user_id'] = $from_user_id;
+        if ( !empty($grades_page) ) $redirect_params['page'] = intval($grades_page);
+        if ( !empty($grades_sort) ) $redirect_params['sort'] = $grades_sort;
+        if ( !empty($grades_dir) ) $redirect_params['dir'] = $grades_dir;
+    }
+    header( 'Location: '.addSession('review.php?' . http_build_query($redirect_params)) ) ;
     return;
 }
 
@@ -374,6 +434,41 @@ $OUTPUT->welcomeUserCourse();
 <div style="margin-bottom: 30px;">
     <p><strong>Author:</strong> <?= htmlentities($author_name) ?></p>
     <p><strong>Submitted:</strong> <?= htmlentities(date('M j, Y g:i A', strtotime($review_result['created_at']))) ?></p>
+    <?php 
+    $submission_flagged = isset($review_result['flagged']) && ($review_result['flagged'] == 1 || $review_result['flagged'] == true);
+    $flag_color = $submission_flagged ? '#d9534f' : '#999';
+    $flag_size = $submission_flagged ? '18px' : '16px';
+    $flag_style = $submission_flagged ? 'font-weight: bold; border: 1px solid #d9534f; border-radius: 3px; padding: 2px;' : '';
+    $flag_alt = $submission_flagged ? 'Submission is flagged (click to unflag)' : 'Submission is not flagged (click to flag)';
+    ?>
+    <?php if ( !$submission_flagged || $USER->instructor ) { ?>
+        <p>
+            <form method="post" style="display: inline;" onsubmit="return confirm('<?= $submission_flagged ? 'Unflag' : 'Flag' ?> this submission?');">
+                <input type="hidden" name="toggle_submission_flag" value="1">
+                <input type="hidden" name="submission_flagged" value="<?= $submission_flagged ? '0' : '1' ?>">
+                <?php if ( !empty($review_page) ) { ?>
+                    <input type="hidden" name="review_page" value="<?= htmlentities($review_page) ?>">
+                <?php } ?>
+                <?php if ( $from_page == 'grade-detail' && !empty($from_user_id) ) { ?>
+                    <input type="hidden" name="from" value="grade-detail">
+                    <input type="hidden" name="user_id" value="<?= htmlentities($from_user_id) ?>">
+                    <?php if ( !empty($grades_page) ) { ?>
+                        <input type="hidden" name="page" value="<?= intval($grades_page) ?>">
+                    <?php } ?>
+                    <?php if ( !empty($grades_sort) ) { ?>
+                        <input type="hidden" name="sort" value="<?= htmlentities($grades_sort) ?>">
+                    <?php } ?>
+                    <?php if ( !empty($grades_dir) ) { ?>
+                        <input type="hidden" name="dir" value="<?= htmlentities($grades_dir) ?>">
+                    <?php } ?>
+                <?php } ?>
+                <button type="submit" class="btn btn-xs" style="background: none; border: none; padding: 0; margin: 0 5px;" aria-label="<?= htmlentities($flag_alt) ?>" title="<?= htmlentities($flag_alt) ?>">
+                    <span class="glyphicon glyphicon-flag" style="color: <?= $flag_color ?>; font-size: <?= $flag_size ?>; <?= $flag_style ?>"></span>
+                    <span style="margin-left: 5px;"><?= $submission_flagged ? 'Unflag Submission' : 'Flag Submission' ?></span>
+                </button>
+            </form>
+        </p>
+    <?php } ?>
 </div>
 
 <div style="margin-bottom: 30px;">

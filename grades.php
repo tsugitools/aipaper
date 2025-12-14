@@ -48,7 +48,7 @@ $sort_sql_map = array(
     'updated_at' => 'lr.updated_at',
     'comments_given' => 'COALESCE(cg.cnt, 0)',
     'comments_received' => 'COALESCE(cr.cnt, 0)',
-    'flags' => 'COALESCE(fl.cnt, 0)',
+    'flags' => 'COALESCE(fl.cnt, 0) + COALESCE(ar.flagged, 0)',
     'deleted_comments' => 'COALESCE(dc.cnt, 0)'
 );
 // Use whitelist to prevent SQL injection
@@ -85,10 +85,11 @@ $rows = $PDOX->allRowsDie(
         lr.updated_at,
         COALESCE(cg.cnt, 0) as comments_given,
         COALESCE(cr.cnt, 0) as comments_received,
-        COALESCE(fl.cnt, 0) as flags,
+        COALESCE(fl.cnt, 0) + COALESCE(ar.flagged, 0) as flags,
         COALESCE(dc.cnt, 0) as deleted_comments
      FROM {$p}lti_result lr
      JOIN {$p}lti_user u ON lr.user_id = u.user_id
+     LEFT JOIN {$p}aipaper_result ar ON ar.result_id = lr.result_id
      LEFT JOIN (
          SELECT user_id, COUNT(*) as cnt
          FROM {$p}aipaper_comment
@@ -96,11 +97,11 @@ $rows = $PDOX->allRowsDie(
          GROUP BY user_id
      ) cg ON cg.user_id = lr.user_id
      LEFT JOIN (
-         SELECT ar.result_id, COUNT(*) as cnt
+         SELECT ar2.result_id, COUNT(*) as cnt
          FROM {$p}aipaper_comment ac
-         JOIN {$p}aipaper_result ar ON ac.result_id = ar.result_id
+         JOIN {$p}aipaper_result ar2 ON ac.result_id = ar2.result_id
          WHERE ac.deleted = 0
-         GROUP BY ar.result_id
+         GROUP BY ar2.result_id
      ) cr ON cr.result_id = lr.result_id
      LEFT JOIN (
          SELECT user_id, COUNT(*) as cnt
