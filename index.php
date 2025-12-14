@@ -314,6 +314,43 @@ if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor )
     return;
 }
 
+// Handle reset submission (check before flag to avoid interference)
+if ( count($_POST) > 0 && isset($_POST['reset_submission']) ) {
+    // Allow reset if instructor, or if resubmit is allowed, or if submission has been submitted
+    // (Since the button only shows when submitted, this check ensures reset is allowed)
+    if ( !$USER->instructor && !$resubmit_allowed && !$is_submitted ) {
+        $_SESSION['error'] = 'Reset not allowed';
+        header( 'Location: '.addSession('index.php') ) ;
+        return;
+    }
+    
+    // Reset submission status (keep content, just make it editable again)
+    // Reset submitted column but keep all content (paper, AI enhanced, comments)
+    // Soft delete all comments on this submission
+    $PDOX->queryDie(
+        "UPDATE {$p}aipaper_result 
+         SET submitted = false, updated_at = NOW()
+         WHERE result_id = :RID",
+        array(
+            ':RID' => $result_id
+        )
+    );
+    
+    // Soft delete all comments on this submission (for points calculation, but hidden from students)
+    $PDOX->queryDie(
+        "UPDATE {$p}aipaper_comment 
+         SET deleted = 1, updated_at = NOW()
+         WHERE result_id = :RID",
+        array(
+            ':RID' => $result_id
+        )
+    );
+    
+    $_SESSION['success'] = 'Submission has been reset. Your paper and AI enhanced content are now editable again.';
+    header( 'Location: '.addSession('index.php') ) ;
+    return;
+}
+
 // Handle toggle flag (anyone can flag and unflag)
 if ( count($_POST) > 0 && isset($_POST['toggle_flag']) ) {
     $comment_id = intval($_POST['toggle_flag']);
@@ -349,8 +386,6 @@ if ( count($_POST) > 0 && isset($_POST['toggle_flag']) ) {
     header( 'Location: '.addSession('index.php') ) ;
     return;
 }
-
-// Handle reset submission
 if ( count($_POST) > 0 && isset($_POST['reset_submission']) ) {
     // Allow reset if instructor, or if resubmit is allowed, or if submission has been submitted
     // (Since the button only shows when submitted, this check ensures reset is allowed)
@@ -1041,7 +1076,17 @@ $(document).ready( function () {
         $('#menu-reset-btn').on('click', function(e) {
             e.preventDefault();
             if ( confirm('Are you sure you want to reset your submission? This will make your paper editable again. Comments on your submission will be hidden but will still count for points.') ) {
-                $('#hidden-reset-btn').click();
+                // Submit form directly with reset_submission parameter
+                var $form = $('#paper_form');
+                // Create a temporary input to submit with reset_submission
+                var $resetInput = $('<input>').attr({
+                    type: 'hidden',
+                    name: 'reset_submission',
+                    value: '1'
+                });
+                $form.append($resetInput);
+                // Submit the form
+                $form[0].submit();
             }
         });
         
@@ -1065,6 +1110,12 @@ $(document).ready( function () {
     // Handle form submission - get data from editors
     $('#paper_form').on('submit', function(e) {
         <?php if ( !$USER->instructor && $can_edit ) { ?>
+            // Don't update editors if this is a reset submission
+            var isReset = $('input[name="reset_submission"]').length > 0;
+            if ( isReset ) {
+                // Allow reset to proceed without updating editors
+                return true;
+            }
             // Update form fields with editor content
             if ( editors['submission'] ) {
                 $('#editor_submission').val(editors['submission'].getData());
