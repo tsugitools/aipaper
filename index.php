@@ -284,6 +284,19 @@ if ( $is_submitted ) {
 // Load instructions from settings
 $instructions = Settings::linkGet('instructions', '');
 
+// Load AI prompt from database (per link)
+$ai_prompt = '';
+if ( $USER->instructor && isset($LAUNCH->link->id) ) {
+    $p = $CFG->dbprefix;
+    $link_row = $PDOX->rowDie(
+        "SELECT ai_prompt FROM {$p}lti_link WHERE link_id = :LID",
+        array(':LID' => $LAUNCH->link->id)
+    );
+    if ( $link_row && isset($link_row['ai_prompt']) ) {
+        $ai_prompt = $link_row['ai_prompt'];
+    }
+}
+
 // Handle toggle comment (soft delete/un-delete)
 if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor ) {
     $comment_id = intval($_POST['toggle_comment']);
@@ -423,7 +436,7 @@ if ( count($_POST) > 0 && isset($_POST['reset_submission']) ) {
 }
 
 // Handle POST submission
-if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_paper'])) ) {
+if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_paper']) || isset($_POST['save_instructions'])) ) {
     $is_submit = isset($_POST['submit_paper']);
     
     if ( !$can_edit && !$USER->instructor ) {
@@ -442,10 +455,23 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         return;
     }
     
-    // For instructors, save instructions
+    // For instructors, save instructions and AI prompt
     if ( $USER->instructor ) {
         $instructions = U::get($_POST, 'instructions', '');
         Settings::linkSet('instructions', $instructions);
+        
+        // Save AI prompt to database
+        $ai_prompt = U::get($_POST, 'ai_prompt', '');
+        if ( isset($LAUNCH->link->id) ) {
+            $p = $CFG->dbprefix;
+            $PDOX->queryDie(
+                "UPDATE {$p}lti_link SET ai_prompt = :PROMPT WHERE link_id = :LID",
+                array(
+                    ':PROMPT' => $ai_prompt,
+                    ':LID' => $LAUNCH->link->id
+                )
+            );
+        }
     }
 
     // Check if was already submitted (MySQL returns 0/1, not boolean)
@@ -493,13 +519,25 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
     // Note: On resubmission, previous comments (including AI) are soft-deleted, so we need a new AI comment
     // Generate whenever Submit button is clicked (not Save) and paper is not empty
     if ( $is_submit && U::isNotEmpty($raw_submission) ) {
+        // Use AI prompt if set, otherwise fall back to instructions
         $instructions = Settings::linkGet('instructions', '');
+        $prompt_to_use = $instructions;
+        if ( isset($LAUNCH->link->id) ) {
+            $p = $CFG->dbprefix;
+            $link_row = $PDOX->rowDie(
+                "SELECT ai_prompt FROM {$p}lti_link WHERE link_id = :LID",
+                array(':LID' => $LAUNCH->link->id)
+            );
+            if ( $link_row && !empty($link_row['ai_prompt']) ) {
+                $prompt_to_use = $link_row['ai_prompt'];
+            }
+        }
         $api_info = getAIApiUrl();
         
         // Only generate AI comment if AI is configured
         if ( $api_info['configured'] ) {
             // Pass URL if available, otherwise let function use test endpoint
-            $ai_result = generateAIComment($instructions, $raw_submission, $api_info['url']);
+            $ai_result = generateAIComment($prompt_to_use, $raw_submission, $api_info['url']);
             
             if ( $ai_result['success'] ) {
                 // Insert AI comment (user_id is NULL for AI comments)
@@ -548,6 +586,8 @@ if ( $LAUNCH->user->instructor ) {
     if ( $CFG->launchactivity ) {
         $menu->addLeft(__('Analytics'), 'analytics');
     }
+    $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
+    $menu->addLeft(__('Prompt'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_prompt" style="cursor: pointer;"');
     $submenu = new \Tsugi\UI\Menu();
     $submenu->addLink(__('Settings'), '#', /* push */ false, SettingsForm::attr());
     // Only show test data generator if key is '12345'
@@ -556,6 +596,7 @@ if ( $LAUNCH->user->instructor ) {
         $submenu->addLink(__('Generate Test Data'), 'testdata.php');
     }
     $menu->addRight(__('Documentation'), 'documentation.html', /* push */ false, 'target="_blank"');
+    $menu->addRight(__('Save'), '#', /* push */ false, 'id="menu-save-instructor-btn" style="cursor: pointer; font-weight: bold;"');
     $menu->addRight(__('Instructor'), $submenu, /* push */ false);
 } else {
     // Add navigation items to menu
@@ -650,17 +691,41 @@ if ( U::strlen($inst_note) > 0 ) {
 </style>
 
 <?php if ( $USER->instructor ) { ?>
-    <!-- Instructor: Instructions editor (no tabs) -->
+    <!-- Instructor: Tabbed interface -->
     <?php $OUTPUT->welcomeUserCourse(); ?>
     <?php if ( $dueDate->message ) { ?>
         <p style="color:red;"><?= htmlentities($dueDate->message) ?></p>
     <?php } ?>
-    <h3>Instructions / Rubric</h3>
-    <form method="post">
-        <div class="ckeditor-container">
-            <textarea name="instructions" id="editor_instructions"><?= htmlentities($instructions ?? '') ?></textarea>
+    
+    <form method="post" id="instructor_form">
+        <!-- Instructions section -->
+        <div class="student-section active" id="section-instructions">
+            <h3>Instructions / Rubric</h3>
+            <div class="ckeditor-container">
+                <textarea name="instructions" id="editor_instructions"><?= htmlentities($instructions ?? '') ?></textarea>
+            </div>
         </div>
-        <p><input type="submit" name="submit_paper" value="Save Instructions" class="btn btn-primary"></p>
+        
+        <!-- AI Prompt section -->
+        <div class="student-section" id="section-ai_prompt">
+            <?php 
+            // Get or create default AI prompt
+            if ( empty($ai_prompt) && !empty($instructions) ) {
+                // Default prompt format
+                $ai_prompt = "You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:\n\n" . $instructions . "\n\nProvide a brief paragraph (approximately 500 words or less) with specific, actionable feedback. Focus on:\n- Strengths of the submission\n- Areas for improvement\n- Specific suggestions for revision\n\nBe encouraging but honest, and reference specific parts of the paper when possible.";
+            } else if ( empty($ai_prompt) ) {
+                // Fallback default prompt
+                $ai_prompt = "You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 500 words or less). Focus on:\n- Strengths of the submission\n- Areas for improvement\n- Specific suggestions for revision\n\nBe encouraging but honest, and reference specific parts of the paper when possible.";
+            }
+            ?>
+            <h3>AI Prompt</h3>
+            <p><em>This prompt is sent to the AI service when generating feedback comments. If left empty, the assignment instructions will be used as the prompt.</em></p>
+            <div class="ckeditor-container">
+                <textarea name="ai_prompt" id="editor_ai_prompt"><?= htmlentities($ai_prompt) ?></textarea>
+            </div>
+        </div>
+        <!-- Hidden submit button for instructor form -->
+        <input type="submit" name="save_instructions" id="hidden-save-instructor-btn" style="display: none;">
     </form>
 <?php } else { ?>
     <!-- Student: Sections with Tsugi menu navigation -->
@@ -954,6 +1019,9 @@ $OUTPUT->footerStart();
 <script src="https://cdn.jsdelivr.net/gh/jitbit/HtmlSanitizer@master/HtmlSanitizer.js"></script>
 <script src="https://cdn.ckeditor.com/ckeditor5/16.0.0/classic/ckeditor.js"></script>
 <script type="text/javascript">
+console.log('Script block loaded');
+console.log('jQuery available:', typeof jQuery !== 'undefined', typeof $ !== 'undefined');
+
 ClassicEditor.defaultConfig = {
     toolbar: {
         items: [
@@ -988,7 +1056,29 @@ function showSpinnerOverlay() {
     }, 1000);
 }
 
-$(document).ready( function () {
+// Test if script is running at all
+console.log('=== SCRIPT STARTING ===');
+console.log('jQuery available:', typeof jQuery !== 'undefined', typeof $ !== 'undefined');
+
+if (typeof jQuery === 'undefined' && typeof $ === 'undefined') {
+    console.error('ERROR: jQuery is not loaded!');
+    // Try loading jQuery
+    var script = document.createElement('script');
+    script.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
+    document.head.appendChild(script);
+    script.onload = function() {
+        console.log('jQuery loaded, retrying...');
+        initializeNavigation();
+    };
+} else {
+    $(document).ready( function () {
+        console.log('Document ready - setting up navigation handlers');
+        initializeNavigation();
+    });
+}
+
+function initializeNavigation() {
+    console.log('=== INITIALIZING NAVIGATION ===');
     // Log AI error to console if present
     <?php if ( isset($_SESSION['ai_error_console']) ) { 
         $error_data = json_decode($_SESSION['ai_error_console'], true);
@@ -1020,6 +1110,7 @@ $(document).ready( function () {
             .catch( error => {
                 console.error( error );
             });
+        // Instructor: AI Prompt editor - will be initialized lazily when tab is clicked
     <?php } else { ?>
         // Student: Submission and AI Enhanced editors (if editable)
         <?php if ( $can_edit ) { ?>
@@ -1099,11 +1190,31 @@ $(document).ready( function () {
         // Instructions display
         var instructionsHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($instructions ?? '') ?>);
         $('#display_instructions').html(instructionsHtml);
-        
-        // Handle Tsugi menu navigation clicks
-        $('.tsugi-nav-link').on('click', function(e) {
+    <?php } ?>
+    
+    // Handle Tsugi menu navigation clicks (use event delegation in case menu is rendered dynamically)
+    // This runs for both instructors and students
+    console.log('Setting up click handler for .tsugi-nav-link');
+    
+    // Wait a moment for menu to render, then check links
+    setTimeout(function() {
+        console.log('Found links:', $('.tsugi-nav-link').length);
+        $('.tsugi-nav-link').each(function() {
+            console.log('Link:', $(this).text(), 'data-section:', $(this).data('section'), 'href:', $(this).attr('href'));
+        });
+    }, 1000);
+    
+    $(document).on('click', '.tsugi-nav-link', function(e) {
+            console.log('CLICK DETECTED on .tsugi-nav-link');
             e.preventDefault();
+            e.stopPropagation();
             var section = $(this).data('section');
+            console.log('Tab clicked:', section, 'Link:', $(this).attr('href'), 'Text:', $(this).text());
+            
+            if ( !section ) {
+                console.error('No section data found on clicked link');
+                return;
+            }
             
             // Remove active class from all navigation links and sections
             $('.tsugi-nav-link').removeClass('active');
@@ -1111,21 +1222,72 @@ $(document).ready( function () {
             
             // Add active class to clicked link and corresponding section
             $(this).addClass('active');
-            $('#section-' + section).addClass('active');
+            var targetSection = $('#section-' + section);
+            console.log('Target section found:', targetSection.length, 'ID:', targetSection.attr('id'));
+            
+            if ( targetSection.length === 0 ) {
+                console.error('Section not found: #section-' + section);
+                return;
+            }
+            
+            targetSection.addClass('active');
+            console.log('Section should now be visible:', targetSection.hasClass('active'), targetSection.css('display'));
+            
+            // Initialize AI Prompt editor if switching to that tab and it's not initialized
+            <?php if ( $USER->instructor ) { ?>
+                if ( section === 'ai_prompt' ) {
+                    console.log('Switching to AI Prompt tab, editor initialized:', !!editors['ai_prompt']);
+                    if ( !editors['ai_prompt'] ) {
+                        // Wait for the section to be visible before initializing CKEditor
+                        setTimeout(function() {
+                            var aiPromptElement = document.querySelector( '#editor_ai_prompt' );
+                            var sectionElement = document.querySelector( '#section-ai_prompt' );
+                            console.log('Initializing AI Prompt editor:', {
+                                element: !!aiPromptElement,
+                                section: !!sectionElement,
+                                active: sectionElement ? sectionElement.classList.contains('active') : false
+                            });
+                            if ( aiPromptElement && sectionElement && sectionElement.classList.contains('active') ) {
+                                ClassicEditor
+                                    .create( aiPromptElement, ClassicEditor.defaultConfig )
+                                    .then(editor => {
+                                        editors['ai_prompt'] = editor;
+                                        console.log( 'AI Prompt editor initialized successfully' );
+                                    })
+                                    .catch( error => {
+                                        console.error( 'AI Prompt editor initialization error:', error );
+                                    });
+                            } else {
+                                console.error( 'AI Prompt editor element not found or section not active', {
+                                    element: !!aiPromptElement,
+                                    section: !!sectionElement,
+                                    active: sectionElement ? sectionElement.classList.contains('active') : false
+                                });
+                            }
+                        }, 150);
+                    }
+                }
+            <?php } ?>
         });
         
-        // Set Main as active by default, unless review_page is in URL
-        <?php if ( isset($_GET['review_page']) ) { ?>
-            // Auto-navigate to Review section if review_page parameter is present
-            $('.tsugi-nav-link').removeClass('active');
-            $('.student-section').removeClass('active');
-            $('.tsugi-nav-link[data-section="review"]').addClass('active');
-            $('#section-review').addClass('active');
+        // Set default active section
+        <?php if ( $USER->instructor ) { ?>
+            // Instructor: Set Instructions as active by default
+            $('.tsugi-nav-link[data-section="instructions"]').addClass('active');
         <?php } else { ?>
-            $('.tsugi-nav-link[data-section="main"]').addClass('active');
+            // Student: Set Main as active by default, unless review_page is in URL
+            <?php if ( isset($_GET['review_page']) ) { ?>
+                // Auto-navigate to Review section if review_page parameter is present
+                $('.tsugi-nav-link').removeClass('active');
+                $('.student-section').removeClass('active');
+                $('.tsugi-nav-link[data-section="review"]').addClass('active');
+                $('#section-review').addClass('active');
+            <?php } else { ?>
+                $('.tsugi-nav-link[data-section="main"]').addClass('active');
+            <?php } ?>
         <?php } ?>
         
-        // Handle menu Save button click
+        // Handle menu Save button click (student)
         $('#menu-save-btn').on('click', function(e) {
             e.preventDefault();
             <?php if ( $can_edit ) { ?>
@@ -1138,6 +1300,22 @@ $(document).ready( function () {
                 }
                 // Trigger the hidden save button
                 $('#hidden-save-btn').click();
+            <?php } ?>
+        });
+        
+        // Handle instructor Save button click
+        $('#menu-save-instructor-btn').on('click', function(e) {
+            e.preventDefault();
+            <?php if ( $USER->instructor ) { ?>
+                // Update editor content before submitting
+                if ( editors['instructions'] ) {
+                    $('#editor_instructions').val(editors['instructions'].getData());
+                }
+                if ( editors['ai_prompt'] ) {
+                    $('#editor_ai_prompt').val(editors['ai_prompt'].getData());
+                }
+                // Trigger the hidden submit button
+                $('#hidden-save-instructor-btn').click();
             <?php } ?>
         });
         
@@ -1197,6 +1375,18 @@ $(document).ready( function () {
             } else {
                 wrapper.slideDown();
                 toggleText.text('Hide');
+            }
+        });
+    
+    // Handle instructor form (instructions and AI prompt)
+    <?php if ( $USER->instructor ) { ?>
+        $('#instructor_form').on('submit', function(e) {
+            // Update editor content before submitting
+            if ( editors['instructions'] ) {
+                $('#editor_instructions').val(editors['instructions'].getData());
+            }
+            if ( editors['ai_prompt'] ) {
+                $('#editor_ai_prompt').val(editors['ai_prompt'].getData());
             }
         });
     <?php } ?>
@@ -1260,7 +1450,7 @@ $(document).ready( function () {
             }
         <?php } ?>
     });
-});
+} // End initializeNavigation function
 </script>
 <?php
 $OUTPUT->footerEnd();
