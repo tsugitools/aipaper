@@ -24,7 +24,7 @@ $link_id = $LAUNCH->link->id;
 $page = max(1, intval(U::get($_GET, 'page', 1)));
 $sort_col = U::get($_GET, 'sort', 'displayname');
 $sort_dir = U::get($_GET, 'dir', 'asc');
-$valid_sort_cols = array('displayname', 'email', 'grade', 'updated_at', 'comments_given', 'comments_received', 'flags');
+$valid_sort_cols = array('displayname', 'email', 'grade', 'updated_at', 'comments_given', 'comments_received', 'flags', 'deleted_comments');
 if (!in_array($sort_col, $valid_sort_cols)) {
     $sort_col = 'displayname';
 }
@@ -42,7 +42,8 @@ $sort_sql_map = array(
     'updated_at' => 'lr.updated_at',
     'comments_given' => 'COALESCE(cg.cnt, 0)',
     'comments_received' => 'COALESCE(cr.cnt, 0)',
-    'flags' => 'COALESCE(fl.cnt, 0)'
+    'flags' => 'COALESCE(fl.cnt, 0)',
+    'deleted_comments' => 'COALESCE(dc.cnt, 0)'
 );
 // Use whitelist to prevent SQL injection
 $sort_sql = isset($sort_sql_map[$sort_col]) ? $sort_sql_map[$sort_col] : 'u.displayname';
@@ -72,7 +73,8 @@ $rows = $PDOX->allRowsDie(
         lr.updated_at,
         COALESCE(cg.cnt, 0) as comments_given,
         COALESCE(cr.cnt, 0) as comments_received,
-        COALESCE(fl.cnt, 0) as flags
+        COALESCE(fl.cnt, 0) as flags,
+        COALESCE(dc.cnt, 0) as deleted_comments
      FROM {$p}lti_result lr
      JOIN {$p}lti_user u ON lr.user_id = u.user_id
      LEFT JOIN (
@@ -94,6 +96,12 @@ $rows = $PDOX->allRowsDie(
          WHERE user_id IS NOT NULL AND flagged = 1
          GROUP BY user_id
      ) fl ON fl.user_id = lr.user_id
+     LEFT JOIN (
+         SELECT user_id, COUNT(*) as cnt
+         FROM {$p}aipaper_comment
+         WHERE user_id IS NOT NULL AND deleted = 1
+         GROUP BY user_id
+     ) dc ON dc.user_id = lr.user_id
      WHERE lr.link_id = :LID
      ORDER BY $order_by
      LIMIT " . intval($per_page) . " OFFSET " . intval($offset),
@@ -141,6 +149,7 @@ echo '<th>' . renderSortHeader('Updated', 'updated_at', $sort_col, $sort_dir) . 
 echo '<th>' . renderSortHeader('Comments Given', 'comments_given', $sort_col, $sort_dir) . '</th>';
 echo '<th>' . renderSortHeader('Comments Received', 'comments_received', $sort_col, $sort_dir) . '</th>';
 echo '<th>' . renderSortHeader('Flags', 'flags', $sort_col, $sort_dir) . '</th>';
+echo '<th>' . renderSortHeader('Deleted Comments', 'deleted_comments', $sort_col, $sort_dir) . '</th>';
 echo '</tr></thead>';
 echo '<tbody>';
 
@@ -153,6 +162,7 @@ foreach ($rows as $row) {
     $comments_given_val = intval($row['comments_given']);
     $comments_received_val = intval($row['comments_received']);
     $flags_val = intval($row['flags']);
+    $deleted_comments_val = intval($row['deleted_comments']);
     
     $detail_url = addSession('grade-detail.php?user_id=' . $user_id);
     
@@ -164,6 +174,7 @@ foreach ($rows as $row) {
     echo '<td>' . $comments_given_val . '</td>';
     echo '<td>' . $comments_received_val . '</td>';
     echo '<td>' . $flags_val . '</td>';
+    echo '<td>' . $deleted_comments_val . '</td>';
     echo '</tr>';
 }
 
