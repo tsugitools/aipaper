@@ -23,7 +23,7 @@ $REGISTER_LTI2 = array(
         "tool_configuration", "user_navigation"
         */
     ),
-    "video" => "https://www.youtube.com/watch?v=n2qz6XpxZ1Q",
+    "not_video" => "https://www.youtube.com/watch?v=n2qz6XpxZ1Q",
     "submissionReview" => array(
         "reviewableStatus" => array("InProgress", "Submitted", "Completed"),
         "label" => "AI Paper",

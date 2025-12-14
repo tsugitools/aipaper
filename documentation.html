@@ -36,6 +36,13 @@
             font-size: 20px;
             font-weight: 600;
         }
+        h5 {
+            color: #2c3e50;
+            margin-top: 25px;
+            margin-bottom: 12px;
+            font-size: 18px;
+            font-weight: 600;
+        }
         p {
             margin-bottom: 15px;
             text-align: justify;
@@ -73,6 +80,96 @@
         <h2>AI MiniPaper Tool - Instructor Guide</h2>
         
         <p>The AI MiniPaper Tool is designed to collect and grade short papers written with AI assistance. Students submit papers using CKEditor 5.0, with feedback provided through comment streams. The tool supports instructor grading, peer review comments, flagging for moderation, and comprehensive student analytics. This guide covers all the features and settings available to instructors.</p>
+
+<h4>Pedagogical Approaches and Settings Combinations</h4>
+<p>The AI MiniPaper Tool is flexible and can be configured to support various pedagogical approaches. Here are several common use cases and recommended settings:</p>
+
+<h5>1. Peer Review Focused Assignment</h5>
+<p><strong>Goal:</strong> Emphasize peer learning and feedback skills.</p>
+<ul>
+    <li><strong>Submit points:</strong> 10-20 points (encourages submission)</li>
+    <li><strong>Instructor grade points:</strong> 0 points (no instructor grading)</li>
+    <li><strong>Points per comment:</strong> 5-10 points</li>
+    <li><strong>Minimum comments:</strong> 3-5 comments required</li>
+    <li><strong>Use actual student names:</strong> Unchecked (anonymous peer review reduces bias)</li>
+    <li><strong>Allow all after minimum:</strong> Checked (encourages continued engagement)</li>
+    <li><strong>Allow reset:</strong> Optional (depends on whether you want students to revise)</li>
+</ul>
+<p><strong>Best for:</strong> Developing critical thinking, improving writing through peer feedback, large classes where individual instructor feedback is impractical.</p>
+
+<h5>2. Instructor Graded Assignment</h5>
+<p><strong>Goal:</strong> Traditional instructor evaluation with optional peer engagement.</p>
+<ul>
+    <li><strong>Submit points:</strong> 10-20 points</li>
+    <li><strong>Instructor grade points:</strong> 50-80 points (main grade component)</li>
+    <li><strong>Points per comment:</strong> 0 points (must be 0 when min_comments = 0)</li>
+    <li><strong>Minimum comments:</strong> 0 (peer review is optional, but won't count toward grade)</li>
+    <li><strong>Use actual student names:</strong> Checked (traditional approach)</li>
+    <li><strong>Allow all after minimum:</strong> Checked (if peer review is enabled)</li>
+    <li><strong>Allow reset:</strong> Unchecked (final submission)</li>
+</ul>
+<p><strong>Best for:</strong> High-stakes assignments, detailed instructor feedback needed, smaller classes.</p>
+<p><strong>Note:</strong> Since minimum comments is 0, points per comment must also be 0. Peer review can still be enabled for learning purposes, but comments won't contribute to the grade calculation.</p>
+
+<h5>3. Completion-Based Assignment</h5>
+<p><strong>Goal:</strong> Track completion and encourage reflection without heavy grading.</p>
+<ul>
+    <li><strong>Submit points:</strong> 50-100 points (full credit for submission)</li>
+    <li><strong>Instructor grade points:</strong> 0 points</li>
+    <li><strong>Points per comment:</strong> 0 points</li>
+    <li><strong>Minimum comments:</strong> 0</li>
+    <li><strong>Use actual student names:</strong> Checked</li>
+    <li><strong>Allow reset:</strong> Checked (allow revisions)</li>
+</ul>
+<p><strong>Best for:</strong> Low-stakes assignments, reflection exercises, participation tracking, formative assessment.</p>
+
+<h5>4. Hybrid Peer Review + Instructor Grading</h5>
+<p><strong>Goal:</strong> Combine peer learning with instructor evaluation.</p>
+<ul>
+    <li><strong>Submit points:</strong> 10 points</li>
+    <li><strong>Instructor grade points:</strong> 50 points (quality assessment)</li>
+    <li><strong>Points per comment:</strong> 5 points</li>
+    <li><strong>Minimum comments:</strong> 3 comments required</li>
+    <li><strong>Use actual student names:</strong> Checked (accountability in peer review)</li>
+    <li><strong>Allow all after minimum:</strong> Checked</li>
+    <li><strong>Allow reset:</strong> Unchecked (final submission)</li>
+</ul>
+<p><strong>Best for:</strong> Balanced assessment, developing both peer review skills and meeting quality standards, medium-sized classes.</p>
+
+<h5>5. Anonymous Peer Review</h5>
+<p><strong>Goal:</strong> Reduce bias and encourage honest feedback.</p>
+<ul>
+    <li><strong>Submit points:</strong> 10-20 points</li>
+    <li><strong>Instructor grade points:</strong> 0-30 points</li>
+    <li><strong>Points per comment:</strong> 5-10 points</li>
+    <li><strong>Minimum comments:</strong> 3-5 comments</li>
+    <li><strong>Use actual student names:</strong> <strong>Unchecked</strong> (key setting for anonymity)</li>
+    <li><strong>Allow all after minimum:</strong> Checked</li>
+    <li><strong>Allow reset:</strong> Optional</li>
+</ul>
+<p><strong>Best for:</strong> Reducing social pressure, encouraging honest critique, addressing bias concerns, sensitive topics.</p>
+
+<h5>6. Scaffolded Peer Review</h5>
+<p><strong>Goal:</strong> Gradually build peer review skills with structured requirements.</p>
+<ul>
+    <li><strong>Submit points:</strong> 20 points</li>
+    <li><strong>Instructor grade points:</strong> 30 points</li>
+    <li><strong>Points per comment:</strong> 5 points</li>
+    <li><strong>Minimum comments:</strong> Start with 2, increase to 4-5 in later assignments</li>
+    <li><strong>Use actual student names:</strong> Checked initially, then unchecked as students gain confidence</li>
+    <li><strong>Allow all after minimum:</strong> Checked</li>
+    <li><strong>Allow reset:</strong> Checked (encourages iterative improvement)</li>
+</ul>
+<p><strong>Best for:</strong> First-time peer reviewers, building review skills over time, courses with multiple assignments.</p>
+
+<h5>General Tips</h5>
+<ul>
+    <li><strong>Total points:</strong> Keep overall points reasonable (50-100 total is common). Remember: Overall points = instructor_points + submit_points + (comment_points × min_comments)</li>
+    <li><strong>Minimum comments:</strong> Set based on class size. For classes of 20+, requiring 3-5 comments ensures everyone gets feedback. For smaller classes, 2-3 may suffice. <strong>Important:</strong> If minimum comments is 0, set points per comment to 0 as well, since comment points won't contribute to overall points when min_comments = 0.</li>
+    <li><strong>Flagging system:</strong> Use flagging to identify problematic content early. Anyone can flag, but only instructors can unflag, providing a moderation safety net.</li>
+    <li><strong>Generated names:</strong> When enabled, instructors can still see real names (with generated names in parentheses), maintaining accountability while providing student privacy.</li>
+    <li><strong>Reset feature:</strong> Enable reset if you want students to revise based on feedback. Disable for final submissions or when you want to preserve the original submission.</li>
+</ul>
 
 <h4>Settings</h4>
 <p>Configure the assignment settings including:</p>
