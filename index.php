@@ -462,6 +462,15 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         
         // Save AI prompt to database
         $ai_prompt = U::get($_POST, 'ai_prompt', '');
+        // If AI prompt is blank, reset to default
+        if ( empty(trim(strip_tags($ai_prompt))) ) {
+            // Create default prompt with HTML formatting (for CKEditor)
+            if ( !empty($instructions) ) {
+                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:</p>\n\n<p>-- Instructions Included Here --</p>\n\n<p>Provide a brief paragraph (approximately 500 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
+            } else {
+                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 500 words or less). Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
+            }
+        }
         if ( isset($LAUNCH->link->id) ) {
             $p = $CFG->dbprefix;
             $PDOX->queryDie(
@@ -530,7 +539,19 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
             );
             if ( $link_row && !empty($link_row['ai_prompt']) ) {
                 $prompt_to_use = $link_row['ai_prompt'];
+                // Replace placeholder with actual instructions
+                // Use regex to find the placeholder in various HTML contexts and preserve formatting
+                // Match the placeholder text regardless of surrounding HTML tags
+                $placeholder_pattern = '/--\s*Instructions\s+Included\s+Here\s*--/i';
+                // Find all matches and replace, preserving the HTML structure around it
+                $prompt_to_use = preg_replace($placeholder_pattern, $instructions, $prompt_to_use);
+            } else {
+                // Fallback to instructions if no AI prompt is set
+                $prompt_to_use = $instructions;
             }
+        } else {
+            // Fallback to instructions if no link_id
+            $prompt_to_use = $instructions;
         }
         $api_info = getAIApiUrl();
         
@@ -709,17 +730,17 @@ if ( U::strlen($inst_note) > 0 ) {
         <!-- AI Prompt section -->
         <div class="student-section" id="section-ai_prompt">
             <?php 
-            // Get or create default AI prompt
+            // Get or create default AI prompt (use HTML formatting for CKEditor)
             if ( empty($ai_prompt) && !empty($instructions) ) {
-                // Default prompt format
-                $ai_prompt = "You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:\n\n" . $instructions . "\n\nProvide a brief paragraph (approximately 500 words or less) with specific, actionable feedback. Focus on:\n- Strengths of the submission\n- Areas for improvement\n- Specific suggestions for revision\n\nBe encouraging but honest, and reference specific parts of the paper when possible.";
+                // Default prompt format with placeholder (HTML formatted)
+                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:</p>\n\n<p>-- Instructions Included Here --</p>\n\n<p>Provide a brief paragraph (approximately 500 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
             } else if ( empty($ai_prompt) ) {
-                // Fallback default prompt
-                $ai_prompt = "You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 500 words or less). Focus on:\n- Strengths of the submission\n- Areas for improvement\n- Specific suggestions for revision\n\nBe encouraging but honest, and reference specific parts of the paper when possible.";
+                // Fallback default prompt (HTML formatted)
+                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 500 words or less). Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
             }
             ?>
             <h3>AI Prompt</h3>
-            <p><em>This prompt is sent to the AI service when generating feedback comments. If left empty, the assignment instructions will be used as the prompt.</em></p>
+            <p><em>This prompt is sent to the AI service when generating feedback comments. Use <strong>-- Instructions Included Here --</strong> as a placeholder where you want the assignment instructions to be inserted automatically.</em></p>
             <div class="ckeditor-container">
                 <textarea name="ai_prompt" id="editor_ai_prompt"><?= htmlentities($ai_prompt) ?></textarea>
             </div>
