@@ -40,7 +40,7 @@ if ( ! $result_id ) {
 
 // Load or create aipaper_result record
 $paper_row = $PDOX->rowDie(
-    "SELECT raw_submission, ai_enhanced_submission, student_comment, flagged, flagged_by, json
+    "SELECT raw_submission, ai_enhanced_submission, student_comment, submitted, flagged, flagged_by, json
      FROM {$p}aipaper_result WHERE result_id = :RID",
     array(':RID' => $result_id)
 );
@@ -55,22 +55,139 @@ if ( $paper_row === false ) {
         'raw_submission' => '',
         'ai_enhanced_submission' => '',
         'student_comment' => '',
+        'submitted' => false,
         'flagged' => false,
         'flagged_by' => null,
         'json' => null
     );
 }
 
-// Check submission status from JSON field
-$paper_json = json_decode($paper_row['json'] ?? '{}');
-if ( !is_object($paper_json) ) $paper_json = new \stdClass();
-$is_submitted = isset($paper_json->submitted) && $paper_json->submitted === true;
+// Check submission status from submitted column (MySQL returns 0/1, not boolean)
+$is_submitted = isset($paper_row['submitted']) && ($paper_row['submitted'] == true || $paper_row['submitted'] == 1);
 
 // Check if resubmit is allowed
 $resubmit_allowed = Settings::linkGet('resubmit', false);
 // Can edit only if not submitted (or if instructor)
 // Resubmit setting only controls Reset button visibility, not editability
 $can_edit = !$is_submitted || $USER->instructor;
+
+// Get minimum comments setting
+$min_comments = Settings::linkGet('mincomments', 0);
+$min_comments = intval($min_comments);
+
+// Load submissions for review (only if student has submitted)
+$review_submissions = array();
+$review_page = 1;
+$total_review_pages = 0;
+if ( $is_submitted && !$USER->instructor ) {
+    // Get page number
+    $review_page = isset($_GET['review_page']) ? max(1, intval($_GET['review_page'])) : 1;
+    $items_per_page = 10;
+    $offset = ($review_page - 1) * $items_per_page;
+    
+    // First, get all submitted results from other students
+    $all_submissions = $PDOX->allRowsDie(
+        "SELECT r.result_id, r.user_id, r.created_at,
+                u.displayname, u.email,
+                ar.raw_submission, ar.ai_enhanced_submission, ar.json
+         FROM {$p}lti_result r
+         INNER JOIN {$p}lti_user u ON r.user_id = u.user_id
+         INNER JOIN {$p}aipaper_result ar ON r.result_id = ar.result_id
+         WHERE r.link_id = :LID 
+           AND r.user_id != :MY_USER_ID
+           AND ar.submitted = true",
+        array(
+            ':LID' => $LAUNCH->link->id,
+            ':MY_USER_ID' => $USER->id
+        )
+    );
+    
+    // Count comments for each submission (by current user)
+    $use_real_names = Settings::linkGet('userealnames', false);
+    $submissions_with_counts = array();
+    foreach ( $all_submissions as $sub_row ) {
+        // Count how many comments current user has made on this submission
+        $my_comment_count = $PDOX->rowDie(
+            "SELECT COUNT(*) as cnt
+             FROM {$p}aipaper_comment
+             WHERE result_id = :RID AND user_id = :MY_USER_ID",
+            array(
+                ':RID' => $sub_row['result_id'],
+                ':MY_USER_ID' => $USER->id
+            )
+        );
+        $my_comments = $my_comment_count ? intval($my_comment_count['cnt']) : 0;
+        
+        // Only include if current user hasn't reached minimum comments yet
+        // If min_comments is 0, show all submissions (no minimum requirement)
+        if ( $min_comments == 0 || $my_comments < $min_comments ) {
+            $submissions_with_counts[] = array(
+                'result_id' => $sub_row['result_id'],
+                'user_id' => $sub_row['user_id'],
+                'display_name' => $use_real_names && !empty($sub_row['displayname']) 
+                    ? $sub_row['displayname'] 
+                    : FakeName::getName($sub_row['user_id']),
+                'raw_submission' => $sub_row['raw_submission'],
+                'ai_enhanced_submission' => $sub_row['ai_enhanced_submission'],
+                'comment_count' => $my_comments,
+                'submission_date' => $sub_row['created_at']
+            );
+        }
+    }
+    
+    // Sort by oldest submission first, then by comment count (fewer comments first)
+    usort($submissions_with_counts, function($a, $b) {
+        $date_cmp = strcmp($a['submission_date'], $b['submission_date']);
+        if ( $date_cmp != 0 ) return $date_cmp;
+        return $a['comment_count'] - $b['comment_count'];
+    });
+    
+    // Paginate
+    $total_review_count = count($submissions_with_counts);
+    $total_review_pages = ceil($total_review_count / $items_per_page);
+    $review_submissions = array_slice($submissions_with_counts, $offset, $items_per_page);
+}
+
+// Load comments for this submission (if submitted)
+$comments = array();
+if ( $is_submitted ) {
+    $use_real_names = Settings::linkGet('userealnames', false);
+    $comment_rows = $PDOX->allRowsDie(
+        "SELECT c.comment_id, c.comment_text, c.comment_type, c.created_at, c.user_id,
+                u.displayname, u.email
+         FROM {$p}aipaper_comment c
+         LEFT JOIN {$p}lti_user u ON c.user_id = u.user_id
+         WHERE c.result_id = :RID
+         ORDER BY c.created_at DESC",
+        array(':RID' => $result_id)
+    );
+    
+    foreach ( $comment_rows as $comment_row ) {
+        $comment = array(
+            'comment_id' => $comment_row['comment_id'],
+            'comment_text' => $comment_row['comment_text'],
+            'comment_type' => $comment_row['comment_type'],
+            'created_at' => $comment_row['created_at'],
+            'user_id' => $comment_row['user_id']
+        );
+        
+        // Get display name based on comment type and settings
+        if ( $comment_row['comment_type'] == 'AI' ) {
+            $comment['display_name'] = 'AI';
+        } else if ( $comment_row['comment_type'] == 'instructor' ) {
+            $comment['display_name'] = 'Staff';
+        } else {
+            // Student comment
+            if ( $use_real_names && !empty($comment_row['displayname']) ) {
+                $comment['display_name'] = $comment_row['displayname'];
+            } else {
+                $comment['display_name'] = FakeName::getName($comment_row['user_id']);
+            }
+        }
+        
+        $comments[] = $comment;
+    }
+}
 
 // Load instructions from settings
 $instructions = Settings::linkGet('instructions', '');
@@ -86,19 +203,12 @@ if ( count($_POST) > 0 && isset($_POST['reset_submission']) ) {
     }
     
     // Reset submission status (keep content, just make it editable again)
-    $paper_json = json_decode($paper_row['json'] ?? '{}');
-    if ( !is_object($paper_json) ) $paper_json = new \stdClass();
-    unset($paper_json->submitted);
-    
-    $json_str = json_encode($paper_json);
-    
-    // Reset submitted status but keep all content (paper, AI enhanced, comments)
+    // Reset submitted column but keep all content (paper, AI enhanced, comments)
     $PDOX->queryDie(
         "UPDATE {$p}aipaper_result 
-         SET json = :JSON, updated_at = NOW()
+         SET submitted = false, updated_at = NOW()
          WHERE result_id = :RID",
         array(
-            ':JSON' => $json_str,
             ':RID' => $result_id
         )
     );
@@ -135,30 +245,27 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         Settings::linkSet('instructions', $instructions);
     }
 
-    // Update submission status in JSON
-    $paper_json = json_decode($paper_row['json'] ?? '{}');
-    if ( !is_object($paper_json) ) $paper_json = new \stdClass();
-    $was_submitted = isset($paper_json->submitted) && $paper_json->submitted === true;
+    // Check if was already submitted (MySQL returns 0/1, not boolean)
+    $was_submitted = isset($paper_row['submitted']) && ($paper_row['submitted'] == true || $paper_row['submitted'] == 1);
     
     // Mark as submitted only if Submit button was clicked (not Save)
+    $new_submitted = $was_submitted;
     if ( $is_submit && !$was_submitted && U::isNotEmpty($raw_submission) ) {
-        $paper_json->submitted = true;
+        $new_submitted = true;
         $RESULT->notifyReadyToGrade();
     }
-    
-    $json_str = json_encode($paper_json);
 
     // Update aipaper_result
     $PDOX->queryDie(
         "UPDATE {$p}aipaper_result 
          SET raw_submission = :RAW, ai_enhanced_submission = :AI, 
-             student_comment = :COMMENT, json = :JSON, updated_at = NOW()
+             student_comment = :COMMENT, submitted = :SUBMITTED, updated_at = NOW()
          WHERE result_id = :RID",
         array(
             ':RAW' => $raw_submission,
             ':AI' => $ai_enhanced,
             ':COMMENT' => $student_comment,
-            ':JSON' => $json_str,
+            ':SUBMITTED' => $new_submitted ? 1 : 0,
             ':RID' => $result_id
         )
     );
@@ -201,6 +308,10 @@ if ( $LAUNCH->user->instructor ) {
     if ( !$is_submitted ) {
         $menu->addLeft(__('Paper'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="submission" style="cursor: pointer;"');
         $menu->addLeft(__('Paper+AI'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_enhanced" style="cursor: pointer;"');
+    }
+    // Show Review if submitted
+    if ( $is_submitted ) {
+        $menu->addLeft(__('Review'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="review" style="cursor: pointer;"');
     }
     
     if ( U::strlen($inst_note) > 0 ) $menu->addRight(__('Note'), '#', /* push */ false, 'data-toggle="modal" data-target="#noteModal"');
@@ -330,6 +441,42 @@ if ( U::strlen($inst_note) > 0 ) {
                     </div>
                 </div>
             <?php } ?>
+            
+            <?php if ( count($comments) > 0 ) { ?>
+                <div style="margin-top: 40px;">
+                    <h4>Comments</h4>
+                    <div class="comments-section" style="margin-top: 15px;">
+                        <?php foreach ( $comments as $comment ) { 
+                            $badge_class = '';
+                            $badge_text = '';
+                            if ( $comment['comment_type'] == 'AI' ) {
+                                $badge_class = 'label-info';
+                                $badge_text = 'AI';
+                            } else if ( $comment['comment_type'] == 'instructor' ) {
+                                $badge_class = 'label-primary';
+                                $badge_text = 'Staff';
+                            } else {
+                                $badge_class = 'label-default';
+                                $badge_text = 'Student';
+                            }
+                            
+                            $comment_date = new DateTime($comment['created_at']);
+                            $formatted_date = $comment_date->format('M j, Y g:i A');
+                        ?>
+                            <div class="comment-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #f9f9f9;">
+                                <div style="margin-bottom: 10px;">
+                                    <span class="label <?= $badge_class ?>" style="margin-right: 8px;"><?= htmlentities($badge_text) ?></span>
+                                    <strong><?= htmlentities($comment['display_name']) ?></strong>
+                                    <span style="color: #666; font-size: 0.9em; margin-left: 10px;"><?= htmlentities($formatted_date) ?></span>
+                                </div>
+                                <div class="comment-text" style="line-height: 1.6;">
+                                    <div class="comment-html-<?= $comment['comment_id'] ?>"></div>
+                                </div>
+                            </div>
+                        <?php } ?>
+                    </div>
+                </div>
+            <?php } ?>
         <?php } else { ?>
             <div class="alert alert-info" style="margin-top: 20px;">
                 <strong>Status:</strong> Your paper has not been submitted yet. Use the Paper and AI Enhanced sections to write and submit your paper.
@@ -373,6 +520,61 @@ if ( U::strlen($inst_note) > 0 ) {
             <p><em>This field is optional. You can enhance your submission using AI tools.</em></p>
         <?php } ?>
     </div>
+    
+    <?php if ( $is_submitted ) { ?>
+    <div class="student-section" id="section-review">
+        <h3>Review Other Submissions</h3>
+        <p>Review and comment on other students' submissions. Submissions are sorted by oldest first, prioritizing those that need more comments.</p>
+        
+        <?php if ( count($review_submissions) > 0 ) { ?>
+            <div class="review-list" style="margin-top: 20px;">
+                <?php foreach ( $review_submissions as $sub ) { 
+                    $sub_date = new DateTime($sub['submission_date']);
+                    $formatted_sub_date = $sub_date->format('M j, Y g:i A');
+                ?>
+                    <div class="review-item" style="margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #f9f9f9;">
+                        <div style="margin-bottom: 10px;">
+                            <strong><?= htmlentities($sub['display_name']) ?></strong>
+                            <span style="color: #666; font-size: 0.9em; margin-left: 10px;">Submitted: <?= htmlentities($formatted_sub_date) ?></span>
+                            <span style="color: #666; font-size: 0.9em; margin-left: 10px;">Your comments: <?= $sub['comment_count'] ?>/<?= $min_comments ?></span>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <?php 
+                            $preview_text = strip_tags($sub['raw_submission']);
+                            $preview = strlen($preview_text) > 200 ? substr($preview_text, 0, 200) . '...' : $preview_text;
+                            ?>
+                            <div style="color: #555; font-style: italic;">
+                                <?= nl2br(htmlentities($preview)) ?>
+                            </div>
+                        </div>
+                        <div>
+                            <a href="review.php?result_id=<?= $sub['result_id'] ?>" class="btn btn-primary btn-sm">Review</a>
+                        </div>
+                    </div>
+                <?php } ?>
+            </div>
+            
+            <?php if ( $total_review_pages > 1 ) { ?>
+                <div class="pagination" style="margin-top: 20px; text-align: center;">
+                    <?php if ( $review_page > 1 ) { ?>
+                        <a href="?review_page=<?= $review_page - 1 ?>" class="btn btn-default">Previous</a>
+                    <?php } ?>
+                    <span style="margin: 0 15px;">
+                        Page <?= $review_page ?> of <?= $total_review_pages ?>
+                    </span>
+                    <?php if ( $review_page < $total_review_pages ) { ?>
+                        <a href="?review_page=<?= $review_page + 1 ?>" class="btn btn-default">Next</a>
+                    <?php } ?>
+                </div>
+            <?php } ?>
+        <?php } else { ?>
+            <div class="alert alert-info" style="margin-top: 20px;">
+                <p>No submissions available for review at this time, or you have already reviewed all available submissions.</p>
+            </div>
+        <?php } ?>
+    </div>
+    <?php } ?>
+    
     <?php if ( $can_edit ) { ?>
         <!-- Hidden submit buttons for menu triggers -->
         <input type="submit" name="save_paper" id="hidden-save-btn" style="display: none;">
@@ -448,6 +650,14 @@ $(document).ready( function () {
             
             var aiHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($paper_row['ai_enhanced_submission'] ?? '') ?>);
             $('#display_ai_enhanced').html(aiHtml);
+        <?php } ?>
+        
+        // Sanitize and display comment HTML
+        <?php if ( $is_submitted && count($comments) > 0 ) { ?>
+            <?php foreach ( $comments as $comment ) { ?>
+                var commentHtml<?= $comment['comment_id'] ?> = HtmlSanitizer.SanitizeHtml(<?= json_encode($comment['comment_text']) ?>);
+                $('.comment-html-<?= $comment['comment_id'] ?>').html(commentHtml<?= $comment['comment_id'] ?>);
+            <?php } ?>
         <?php } ?>
         
         // Initialize readonly CKEditor for submitted papers

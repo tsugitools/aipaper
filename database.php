@@ -22,7 +22,8 @@ array( "{$CFG->dbprefix}aipaper_result",
     raw_submission TEXT NULL,
     ai_enhanced_submission TEXT NULL,
     student_comment TEXT NULL,
-    flagged      BOOLEAN NOT NULL DEFAULT FALSE,
+    submitted    TINYINT(1) NOT NULL DEFAULT 0,
+    flagged      TINYINT(1) NOT NULL DEFAULT 0,
     flagged_by   INTEGER NULL,  -- user_id who flagged this submission
     json         TEXT NULL,
 
@@ -49,7 +50,7 @@ array( "{$CFG->dbprefix}aipaper_comment",
     user_id      INTEGER NULL,  -- NULL for AI comments
     comment_text TEXT NOT NULL,
     comment_type ENUM('student', 'instructor', 'AI') NOT NULL,
-    flagged      BOOLEAN NOT NULL DEFAULT FALSE,
+    flagged      TINYINT(1) NOT NULL DEFAULT 0,
     flagged_by   INTEGER NULL,  -- user_id who flagged this comment
     json         TEXT NULL,
 
