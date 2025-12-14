@@ -234,7 +234,17 @@ if ( $result_row ) {
     echo('</p>');
     
     if ( $paper_row && ($paper_row['submitted'] == 1 || $paper_row['submitted'] == true) ) {
-        $review_url = 'review.php?result_id='.$result_id.'&from=grade-detail&user_id='.$user_id;
+        // Preserve pagination and sorting when linking to review.php
+        $review_params = array(
+            'result_id' => $result_id,
+            'from' => 'grade-detail',
+            'user_id' => $user_id
+        );
+        // Add pagination/sort params if they exist
+        if (isset($_GET['page'])) $review_params['page'] = intval($_GET['page']);
+        if (isset($_GET['sort'])) $review_params['sort'] = U::get($_GET, 'sort');
+        if (isset($_GET['dir'])) $review_params['dir'] = U::get($_GET, 'dir');
+        $review_url = 'review.php?' . http_build_query($review_params);
         echo('<p><a href="'.$review_url.'" class="btn btn-primary">');
         echo(__('Review Submission'));
         echo("</a></p>\n");

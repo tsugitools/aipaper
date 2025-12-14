@@ -27,6 +27,11 @@ $review_page = U::get($_GET, 'review_page', '');
 $from_page = U::get($_GET, 'from', '');
 $from_user_id = U::get($_GET, 'user_id', '');
 
+// Get pagination and sorting parameters from grades.php (for instructor navigation)
+$grades_page = U::get($_GET, 'page', '');
+$grades_sort = U::get($_GET, 'sort', '');
+$grades_dir = U::get($_GET, 'dir', '');
+
 // Verify current user has submitted their own paper (unless instructor)
 if ( !$USER->instructor ) {
     $my_result_id = $RESULT->id;
@@ -79,6 +84,9 @@ if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor )
     $review_page = U::get($_POST, 'review_page', U::get($_GET, 'review_page', ''));
     $from_page = U::get($_POST, 'from', U::get($_GET, 'from', ''));
     $from_user_id = U::get($_POST, 'user_id', U::get($_GET, 'user_id', ''));
+    $grades_page = U::get($_POST, 'page', U::get($_GET, 'page', ''));
+    $grades_sort = U::get($_POST, 'sort', U::get($_GET, 'sort', ''));
+    $grades_dir = U::get($_POST, 'dir', U::get($_GET, 'dir', ''));
     
     // Verify comment exists and belongs to this link
     $comment_check = $PDOX->rowDie(
@@ -102,14 +110,19 @@ if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor )
     }
     
     // Redirect back to review.php with preserved parameters
-    $redirect_url = 'review.php?result_id='.$review_result_id;
+    $redirect_params = array('result_id' => $review_result_id);
     if ( !empty($review_page) ) {
-        $redirect_url .= '&review_page=' . intval($review_page);
+        $redirect_params['review_page'] = intval($review_page);
     }
     if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
-        $redirect_url .= '&from=grade-detail&user_id=' . urlencode($from_user_id);
+        $redirect_params['from'] = 'grade-detail';
+        $redirect_params['user_id'] = $from_user_id;
+        // Preserve grades.php pagination/sort params
+        if ( !empty($grades_page) ) $redirect_params['page'] = intval($grades_page);
+        if ( !empty($grades_sort) ) $redirect_params['sort'] = $grades_sort;
+        if ( !empty($grades_dir) ) $redirect_params['dir'] = $grades_dir;
     }
-    header( 'Location: '.addSession($redirect_url) ) ;
+    header( 'Location: '.addSession('review.php?' . http_build_query($redirect_params)) ) ;
     return;
 }
 
@@ -120,19 +133,27 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
     // Get from parameters from POST (form) or GET (URL)
     $from_page = U::get($_POST, 'from', U::get($_GET, 'from', ''));
     $from_user_id = U::get($_POST, 'user_id', U::get($_GET, 'user_id', ''));
+    // Get grades.php pagination/sort params
+    $grades_page = U::get($_POST, 'page', U::get($_GET, 'page', ''));
+    $grades_sort = U::get($_POST, 'sort', U::get($_GET, 'sort', ''));
+    $grades_dir = U::get($_POST, 'dir', U::get($_GET, 'dir', ''));
     
     $comment_text = U::get($_POST, 'comment_text', '');
     
     if ( U::isEmpty($comment_text) ) {
         $_SESSION['error'] = 'Comment cannot be blank';
-        $redirect_url = 'review.php?result_id='.$review_result_id;
+        $redirect_params = array('result_id' => $review_result_id);
         if ( !empty($review_page) ) {
-            $redirect_url .= '&review_page=' . intval($review_page);
+            $redirect_params['review_page'] = intval($review_page);
         }
         if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
-            $redirect_url .= '&from=grade-detail&user_id=' . urlencode($from_user_id);
+            $redirect_params['from'] = 'grade-detail';
+            $redirect_params['user_id'] = $from_user_id;
+            if ( !empty($grades_page) ) $redirect_params['page'] = intval($grades_page);
+            if ( !empty($grades_sort) ) $redirect_params['sort'] = $grades_sort;
+            if ( !empty($grades_dir) ) $redirect_params['dir'] = $grades_dir;
         }
-        header( 'Location: '.addSession($redirect_url) ) ;
+        header( 'Location: '.addSession('review.php?' . http_build_query($redirect_params)) ) ;
         return;
     }
     
@@ -165,16 +186,21 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
     
     // Redirect back to grade-detail.php if that's where we came from
     if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
-        header( 'Location: '.addSession('grade-detail.php?user_id='.urlencode($from_user_id)) ) ;
+        $redirect_params = array('user_id' => $from_user_id);
+        // Preserve grades.php pagination/sort params
+        if ( !empty($grades_page) ) $redirect_params['page'] = intval($grades_page);
+        if ( !empty($grades_sort) ) $redirect_params['sort'] = $grades_sort;
+        if ( !empty($grades_dir) ) $redirect_params['dir'] = $grades_dir;
+        header( 'Location: '.addSession('grade-detail.php?' . http_build_query($redirect_params)) ) ;
         return;
     }
     
     // Otherwise redirect back to review.php (for students from index.php)
-    $redirect_url = 'review.php?result_id='.$review_result_id;
+    $redirect_params = array('result_id' => $review_result_id);
     if ( !empty($review_page) ) {
-        $redirect_url .= '&review_page=' . intval($review_page);
+        $redirect_params['review_page'] = intval($review_page);
     }
-    header( 'Location: '.addSession($redirect_url) ) ;
+    header( 'Location: '.addSession('review.php?' . http_build_query($redirect_params)) ) ;
     return;
 }
 
@@ -231,7 +257,12 @@ $menu = new \Tsugi\UI\MenuSet();
 if ( $USER->instructor ) {
     // If we came from grade-detail, go back there; otherwise go to grades.php
     if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
-        $menu->addLeft(__('Back'), 'grade-detail.php?user_id='.urlencode($from_user_id));
+        $back_params = array('user_id' => $from_user_id);
+        // Preserve grades.php pagination/sort params
+        if ( !empty($grades_page) ) $back_params['page'] = intval($grades_page);
+        if ( !empty($grades_sort) ) $back_params['sort'] = $grades_sort;
+        if ( !empty($grades_dir) ) $back_params['dir'] = $grades_dir;
+        $menu->addLeft(__('Back'), 'grade-detail.php?' . http_build_query($back_params));
     } else {
         $menu->addLeft(__('Back to Grades'), 'grades.php');
     }
@@ -334,6 +365,15 @@ $OUTPUT->welcomeUserCourse();
                                 <?php if ( $from_page == 'grade-detail' && !empty($from_user_id) ) { ?>
                                     <input type="hidden" name="from" value="grade-detail">
                                     <input type="hidden" name="user_id" value="<?= htmlentities($from_user_id) ?>">
+                                    <?php if ( !empty($grades_page) ) { ?>
+                                        <input type="hidden" name="page" value="<?= intval($grades_page) ?>">
+                                    <?php } ?>
+                                    <?php if ( !empty($grades_sort) ) { ?>
+                                        <input type="hidden" name="sort" value="<?= htmlentities($grades_sort) ?>">
+                                    <?php } ?>
+                                    <?php if ( !empty($grades_dir) ) { ?>
+                                        <input type="hidden" name="dir" value="<?= htmlentities($grades_dir) ?>">
+                                    <?php } ?>
                                 <?php } ?>
                                 <button type="submit" class="btn btn-xs btn-default" style="margin-left: 10px;">
                                     <?= isset($comment['deleted']) && $comment['deleted'] ? 'Show' : 'Hide' ?>
@@ -358,6 +398,15 @@ $OUTPUT->welcomeUserCourse();
             <?php if ( $from_page == 'grade-detail' && !empty($from_user_id) ) { ?>
                 <input type="hidden" name="from" value="grade-detail">
                 <input type="hidden" name="user_id" value="<?= htmlentities($from_user_id) ?>">
+                <?php if ( !empty($grades_page) ) { ?>
+                    <input type="hidden" name="page" value="<?= intval($grades_page) ?>">
+                <?php } ?>
+                <?php if ( !empty($grades_sort) ) { ?>
+                    <input type="hidden" name="sort" value="<?= htmlentities($grades_sort) ?>">
+                <?php } ?>
+                <?php if ( !empty($grades_dir) ) { ?>
+                    <input type="hidden" name="dir" value="<?= htmlentities($grades_dir) ?>">
+                <?php } ?>
             <?php } ?>
             <div class="ckeditor-container">
                 <textarea name="comment_text" id="editor_comment"></textarea>
