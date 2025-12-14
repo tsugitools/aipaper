@@ -37,13 +37,6 @@ $row = GradeUtil::gradeLoad($user_id);
 
 $content = $LAUNCH->result->getJsonKeyForUser('content', '', $user_id);
 
-// Load and parse the old JSON
-$json = $LAUNCH->result->getJsonForUser($user_id);
-if ( is_string($json) ) $json = json_decode($json);
-if ( ! is_object($json) ) $json = new \stdClass();
-
-$old_lock = isset($json->lock) && $json->lock;
-
 $old_grade = $row ? $row['grade'] : 0;
 
 // Get instructor_points setting
@@ -56,8 +49,6 @@ $old_points = 0;
 if ( $instructor_points > 0 && $old_grade > 0 ) {
     $old_points = (int) ($old_grade * $instructor_points);
 }
-
-$inst_note = $LAUNCH->result->getNote($user_id);
 
 $gradeurl = Table::makeUrl('grade-detail.php', $getparms);
 $gradesurl = Table::makeUrl('grades.php', $getparms);
@@ -156,8 +147,6 @@ if ( isset($_POST['instSubmit']) || isset($_POST['instSubmitAdvance']) ) {
 
     $success = '';
 
-    $inst_note = U::get($_POST, 'inst_note');
-
     $result = Result::lookupResultBypass($user_id);
     $result['grade'] = -1; // Force resend
     $debug_log = array();
@@ -165,9 +154,6 @@ if ( isset($_POST['instSubmit']) || isset($_POST['instSubmitAdvance']) ) {
         LTI13::ACTIVITY_PROGRESS => LTI13::ACTIVITY_PROGRESS_COMPLETED,
         LTI13::GRADING_PROGRESS => LTI13::GRADING_PROGRESS_FULLYGRADED,
     );
-    if ( is_string($inst_note) && strlen($inst_note) > 1 ) {
-        $extra13[LTI13::LINEITEM_COMMENT] = $inst_note;
-    }
 
     $status = $LAUNCH->result->gradeSend($computed_grade, $result, $debug_log, $extra13);
     if ( $status === true ) {
@@ -179,23 +165,6 @@ if ( isset($_POST['instSubmit']) || isset($_POST['instSubmitAdvance']) ) {
         $_SESSION['debug_log'] = $debug_log;
     }
 
-    $update_json = false;
-
-    $new_lock = U::get($_POST, 'lock') == 'on';
-    if ( $new_lock != $old_lock ) {
-        $json->lock = $new_lock;
-        if ( U::strlen($success) > 0 ) $success .= ', ';
-        $success .= $new_lock ? 'Assignment locked' : 'Assignment unlocked';
-        $update_json = true;
-    }
-
-    if ( $update_json ) {
-        $json = json_encode($json);
-        $LAUNCH->result->setJsonForUser($json, $user_id);
-    }
-
-    $inst_note = U::get($_POST, 'inst_note');
-    $LAUNCH->result->setNote(U::get($_POST, 'inst_note'), $user_id );
 
     if ( U::strlen($success) > 0 ) $_SESSION['success'] = $success;
 
@@ -213,9 +182,6 @@ $OUTPUT->bodyStart();
 $OUTPUT->topNav($menu);
 $OUTPUT->flashMessages();
 
-// Show the basic info for this user
-GradeUtil::gradeShowInfo($row, false);
-
 // Get result_id for this user to link to review page
 $p = $CFG->dbprefix;
 $result_row = $PDOX->rowDie(
@@ -223,6 +189,8 @@ $result_row = $PDOX->rowDie(
     array(':UID' => $user_id, ':LID' => $LAUNCH->link->id)
 );
 
+$paper_row = null;
+$result_id = null;
 if ( $result_row ) {
     $result_id = $result_row['result_id'];
     $paper_row = $PDOX->rowDie(
@@ -230,8 +198,39 @@ if ( $result_row ) {
         array(':RID' => $result_id)
     );
     
+    // Calculate points and review count for this student
+    $points_data = calculatePoints($user_id, $LAUNCH->link->id, $result_id);
+    $earned_points = $points_data['earned_points'];
+    $overall_points = $points_data['overall_points'];
+    
+    // Count reviews made by this student
+    $reviewed_row = $PDOX->rowDie(
+        "SELECT COUNT(DISTINCT result_id) as cnt FROM {$p}aipaper_comment WHERE user_id = :UID",
+        array(':UID' => $user_id)
+    );
+    $reviewed_count = $reviewed_row ? intval($reviewed_row['cnt']) : 0;
+    
+    // Get min_comments setting
+    $min_comments = Settings::linkGet('mincomments', 0);
+    $min_comments = intval($min_comments);
+    
+    // Display points and review count
+    if ( $overall_points > 0 ) {
+        echo('<p><strong>Points:</strong> '.$earned_points.'/'.$overall_points.'</p>');
+    }
+    echo('<p><strong>Review count:</strong> ');
+    if ( $min_comments == 0 ) {
+        echo($reviewed_count);
+    } else if ( $reviewed_count < $min_comments ) {
+        echo($reviewed_count.'/'.$min_comments);
+    } else {
+        echo($reviewed_count);
+    }
+    echo('</p>');
+    
     if ( $paper_row && ($paper_row['submitted'] == 1 || $paper_row['submitted'] == true) ) {
-        echo('<p><a href="review.php?result_id='.$result_id.'" class="btn btn-primary">');
+        $review_url = 'review.php?result_id='.$result_id.'&from=grade-detail&user_id='.$user_id;
+        echo('<p><a href="'.$review_url.'" class="btn btn-primary">');
         echo(__('Review Submission'));
         echo("</a></p>\n");
     }
@@ -262,16 +261,7 @@ if ( $instructor_points > 0 ) {
     echo('<p><em>Instructor points not configured. Set instructor points in Settings to enable grading.</em></p>');
 }
 
-echo('<label for="lock">Student Submission Locked:</label>
-      <input type="checkbox" name="lock" id="lock"'.
-      ($old_lock ? ' checked ' : '')
-      .'/><br/>');
-
-echo('<label for="inst_note">Instructor Note To Student</label><br/>
-      <textarea name="inst_note" id="inst_note" style="width:60%" rows="5">');
-echo(htmlentities($inst_note??''));
-echo('</textarea><br/>
-      <input type="submit" name="instSubmit" value="Update" class="btn btn-primary">');
+echo('<input type="submit" name="instSubmit" value="Update" class="btn btn-primary">');
 echo('</form>');
 
 // Reset submission button (separate form)

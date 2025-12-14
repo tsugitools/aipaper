@@ -23,6 +23,10 @@ $review_result_id = intval($review_result_id);
 // Get review_page parameter to preserve it
 $review_page = U::get($_GET, 'review_page', '');
 
+// Get from parameter to know where to return to
+$from_page = U::get($_GET, 'from', '');
+$from_user_id = U::get($_GET, 'user_id', '');
+
 // Verify current user has submitted their own paper (unless instructor)
 if ( !$USER->instructor ) {
     $my_result_id = $RESULT->id;
@@ -70,6 +74,9 @@ if ( !$USER->instructor && $review_result['user_id'] == $USER->id ) {
 if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
     // Get review_page from POST (form) or GET (URL)
     $review_page = U::get($_POST, 'review_page', U::get($_GET, 'review_page', ''));
+    // Get from parameters from POST (form) or GET (URL)
+    $from_page = U::get($_POST, 'from', U::get($_GET, 'from', ''));
+    $from_user_id = U::get($_POST, 'user_id', U::get($_GET, 'user_id', ''));
     
     $comment_text = U::get($_POST, 'comment_text', '');
     
@@ -78,6 +85,9 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
         $redirect_url = 'review.php?result_id='.$review_result_id;
         if ( !empty($review_page) ) {
             $redirect_url .= '&review_page=' . intval($review_page);
+        }
+        if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
+            $redirect_url .= '&from=grade-detail&user_id=' . urlencode($from_user_id);
         }
         header( 'Location: '.addSession($redirect_url) ) ;
         return;
@@ -109,6 +119,14 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
     }
     
     $_SESSION['success'] = 'Comment added successfully';
+    
+    // Redirect back to grade-detail.php if that's where we came from
+    if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
+        header( 'Location: '.addSession('grade-detail.php?user_id='.urlencode($from_user_id)) ) ;
+        return;
+    }
+    
+    // Otherwise redirect back to review.php (for students from index.php)
     $redirect_url = 'review.php?result_id='.$review_result_id;
     if ( !empty($review_page) ) {
         $redirect_url .= '&review_page=' . intval($review_page);
@@ -168,7 +186,12 @@ $author_name = $use_real_names && !empty($review_result['displayname'])
 
 $menu = new \Tsugi\UI\MenuSet();
 if ( $USER->instructor ) {
-    $menu->addLeft(__('Back to Grades'), 'grades.php');
+    // If we came from grade-detail, go back there; otherwise go to grades.php
+    if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
+        $menu->addLeft(__('Back'), 'grade-detail.php?user_id='.urlencode($from_user_id));
+    } else {
+        $menu->addLeft(__('Back to Grades'), 'grades.php');
+    }
 } else {
     $back_url = 'index.php';
     if ( !empty($review_page) ) {
@@ -272,6 +295,10 @@ $OUTPUT->welcomeUserCourse();
         <form method="post">
             <?php if ( !empty($review_page) ) { ?>
                 <input type="hidden" name="review_page" value="<?= intval($review_page) ?>">
+            <?php } ?>
+            <?php if ( $from_page == 'grade-detail' && !empty($from_user_id) ) { ?>
+                <input type="hidden" name="from" value="grade-detail">
+                <input type="hidden" name="user_id" value="<?= htmlentities($from_user_id) ?>">
             <?php } ?>
             <div class="ckeditor-container">
                 <textarea name="comment_text" id="editor_comment"></textarea>
