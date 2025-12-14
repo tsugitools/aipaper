@@ -75,6 +75,66 @@ if ( !$USER->instructor && $review_result['user_id'] == $USER->id ) {
     return;
 }
 
+// Handle toggle flag
+if ( count($_POST) > 0 && isset($_POST['toggle_flag']) ) {
+    $comment_id = intval($_POST['toggle_flag']);
+    $new_flagged = intval($_POST['comment_flagged']);
+    
+    // Get navigation parameters
+    $review_page = U::get($_POST, 'review_page', U::get($_GET, 'review_page', ''));
+    $from_page = U::get($_POST, 'from', U::get($_GET, 'from', ''));
+    $from_user_id = U::get($_POST, 'user_id', U::get($_GET, 'user_id', ''));
+    $grades_page = U::get($_POST, 'page', U::get($_GET, 'page', ''));
+    $grades_sort = U::get($_POST, 'sort', U::get($_GET, 'sort', ''));
+    $grades_dir = U::get($_POST, 'dir', U::get($_GET, 'dir', ''));
+    
+    // Verify comment exists and belongs to this link
+    $comment_check = $PDOX->rowDie(
+        "SELECT c.comment_id, c.flagged, c.flagged_by
+         FROM {$p}aipaper_comment c
+         INNER JOIN {$p}lti_result r ON c.result_id = r.result_id
+         WHERE c.comment_id = :CID AND r.link_id = :LID",
+        array(':CID' => $comment_id, ':LID' => $LAUNCH->link->id)
+    );
+    
+    if ( $comment_check ) {
+        // Anyone can flag, but only instructors can unflag
+        if ( $new_flagged == 1 || $USER->instructor ) {
+            $flagged_by = $new_flagged == 1 ? $USER->id : null;
+            $PDOX->queryDie(
+                "UPDATE {$p}aipaper_comment 
+                 SET flagged = :FLAGGED, flagged_by = :FLAGGED_BY, updated_at = NOW()
+                 WHERE comment_id = :CID",
+                array(
+                    ':FLAGGED' => $new_flagged,
+                    ':FLAGGED_BY' => $flagged_by,
+                    ':CID' => $comment_id
+                )
+            );
+            $_SESSION['success'] = $new_flagged ? 'Comment flagged' : 'Comment unflagged';
+        } else {
+            $_SESSION['error'] = 'Only instructors can unflag comments';
+        }
+    } else {
+        $_SESSION['error'] = 'Comment not found';
+    }
+    
+    // Redirect back to review.php with preserved parameters
+    $redirect_params = array('result_id' => $review_result_id);
+    if ( !empty($review_page) ) {
+        $redirect_params['review_page'] = intval($review_page);
+    }
+    if ( $from_page == 'grade-detail' && !empty($from_user_id) ) {
+        $redirect_params['from'] = 'grade-detail';
+        $redirect_params['user_id'] = $from_user_id;
+        if ( !empty($grades_page) ) $redirect_params['page'] = intval($grades_page);
+        if ( !empty($grades_sort) ) $redirect_params['sort'] = $grades_sort;
+        if ( !empty($grades_dir) ) $redirect_params['dir'] = $grades_dir;
+    }
+    header( 'Location: '.addSession('review.php?' . http_build_query($redirect_params)) ) ;
+    return;
+}
+
 // Handle toggle comment (soft delete/un-delete)
 if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor ) {
     $comment_id = intval($_POST['toggle_comment']);
@@ -210,6 +270,7 @@ $use_real_names = Settings::linkGet('userealnames', false);
 $deleted_filter = $USER->instructor ? '' : 'AND c.deleted = 0';
 $comment_rows = $PDOX->allRowsDie(
     "SELECT c.comment_id, c.comment_text, c.comment_type, c.created_at, c.user_id, c.deleted,
+            c.flagged, c.flagged_by,
             u.displayname, u.email
      FROM {$p}aipaper_comment c
      LEFT JOIN {$p}lti_user u ON c.user_id = u.user_id
@@ -226,7 +287,9 @@ foreach ( $comment_rows as $comment_row ) {
         'comment_type' => $comment_row['comment_type'],
         'created_at' => $comment_row['created_at'],
         'user_id' => $comment_row['user_id'],
-        'deleted' => isset($comment_row['deleted']) && ($comment_row['deleted'] == 1 || $comment_row['deleted'] == true)
+        'deleted' => isset($comment_row['deleted']) && ($comment_row['deleted'] == 1 || $comment_row['deleted'] == true),
+        'flagged' => isset($comment_row['flagged']) && ($comment_row['flagged'] == 1 || $comment_row['flagged'] == true),
+        'flagged_by' => $comment_row['flagged_by']
     );
     
     // Get display name based on comment type and settings
@@ -352,34 +415,74 @@ $OUTPUT->welcomeUserCourse();
                         <span class="label <?= $badge_class ?>" style="margin-right: 8px;"><?= htmlentities($badge_text) ?></span>
                         <strong><?= htmlentities($comment['display_name']) ?></strong>
                         <span style="color: #666; font-size: 0.9em; margin-left: 10px;"><?= htmlentities($formatted_date) ?></span>
-                        <?php if ( isset($comment['deleted']) && $comment['deleted'] ) { ?>
-                            <span class="label label-warning" style="margin-left: 10px;">Soft Deleted</span>
-                        <?php } ?>
-                        <?php if ( $USER->instructor ) { ?>
-                            <form method="post" style="display: inline;" onsubmit="return confirm('<?= isset($comment['deleted']) && $comment['deleted'] ? 'Un-hide' : 'Hide' ?> this comment?');">
-                                <input type="hidden" name="toggle_comment" value="<?= $comment['comment_id'] ?>">
-                                <input type="hidden" name="comment_deleted" value="<?= isset($comment['deleted']) && $comment['deleted'] ? '0' : '1' ?>">
-                                <?php if ( !empty($review_page) ) { ?>
-                                    <input type="hidden" name="review_page" value="<?= htmlentities($review_page) ?>">
-                                <?php } ?>
-                                <?php if ( $from_page == 'grade-detail' && !empty($from_user_id) ) { ?>
-                                    <input type="hidden" name="from" value="grade-detail">
-                                    <input type="hidden" name="user_id" value="<?= htmlentities($from_user_id) ?>">
-                                    <?php if ( !empty($grades_page) ) { ?>
-                                        <input type="hidden" name="page" value="<?= intval($grades_page) ?>">
+                        <span style="margin-left: 10px;">
+                            <?php if ( $USER->instructor ) { ?>
+                                <!-- Trash can for hide/show (instructors only) -->
+                                <?php 
+                                $is_deleted = isset($comment['deleted']) && $comment['deleted'];
+                                $trash_color = $is_deleted ? '#d9534f' : '#999';
+                                $trash_size = $is_deleted ? '18px' : '16px';
+                                $trash_style = $is_deleted ? 'font-weight: bold; border: 1px solid #d9534f; border-radius: 3px; padding: 2px;' : '';
+                                $trash_alt = $is_deleted ? 'Comment is hidden (click to show)' : 'Comment is visible (click to hide)';
+                                ?>
+                                <form method="post" style="display: inline;" onsubmit="return confirm('<?= $is_deleted ? 'Un-hide' : 'Hide' ?> this comment?');">
+                                    <input type="hidden" name="toggle_comment" value="<?= $comment['comment_id'] ?>">
+                                    <input type="hidden" name="comment_deleted" value="<?= $is_deleted ? '0' : '1' ?>">
+                                    <?php if ( !empty($review_page) ) { ?>
+                                        <input type="hidden" name="review_page" value="<?= htmlentities($review_page) ?>">
                                     <?php } ?>
-                                    <?php if ( !empty($grades_sort) ) { ?>
-                                        <input type="hidden" name="sort" value="<?= htmlentities($grades_sort) ?>">
+                                    <?php if ( $from_page == 'grade-detail' && !empty($from_user_id) ) { ?>
+                                        <input type="hidden" name="from" value="grade-detail">
+                                        <input type="hidden" name="user_id" value="<?= htmlentities($from_user_id) ?>">
+                                        <?php if ( !empty($grades_page) ) { ?>
+                                            <input type="hidden" name="page" value="<?= intval($grades_page) ?>">
+                                        <?php } ?>
+                                        <?php if ( !empty($grades_sort) ) { ?>
+                                            <input type="hidden" name="sort" value="<?= htmlentities($grades_sort) ?>">
+                                        <?php } ?>
+                                        <?php if ( !empty($grades_dir) ) { ?>
+                                            <input type="hidden" name="dir" value="<?= htmlentities($grades_dir) ?>">
+                                        <?php } ?>
                                     <?php } ?>
-                                    <?php if ( !empty($grades_dir) ) { ?>
-                                        <input type="hidden" name="dir" value="<?= htmlentities($grades_dir) ?>">
+                                    <button type="submit" class="btn btn-xs" style="background: none; border: none; padding: 0; margin: 0 5px;" aria-label="<?= htmlentities($trash_alt) ?>" title="<?= htmlentities($trash_alt) ?>">
+                                        <span class="glyphicon glyphicon-trash" style="color: <?= $trash_color ?>; font-size: <?= $trash_size ?>; <?= $trash_style ?>"></span>
+                                    </button>
+                                </form>
+                            <?php } ?>
+                            <!-- Flag/unflag button (anyone can flag, only instructors can unflag) -->
+                            <?php if ( !isset($comment['flagged']) || !$comment['flagged'] || $USER->instructor ) { ?>
+                                <?php 
+                                $is_flagged = isset($comment['flagged']) && $comment['flagged'];
+                                $flag_color = $is_flagged ? '#d9534f' : '#999';
+                                $flag_size = $is_flagged ? '18px' : '16px';
+                                $flag_style = $is_flagged ? 'font-weight: bold; border: 1px solid #d9534f; border-radius: 3px; padding: 2px;' : '';
+                                $flag_alt = $is_flagged ? 'Comment is flagged (click to unflag)' : 'Comment is not flagged (click to flag)';
+                                ?>
+                                <form method="post" style="display: inline;" onsubmit="return confirm('<?= $is_flagged ? 'Unflag' : 'Flag' ?> this comment?');">
+                                    <input type="hidden" name="toggle_flag" value="<?= $comment['comment_id'] ?>">
+                                    <input type="hidden" name="comment_flagged" value="<?= $is_flagged ? '0' : '1' ?>">
+                                    <?php if ( !empty($review_page) ) { ?>
+                                        <input type="hidden" name="review_page" value="<?= htmlentities($review_page) ?>">
                                     <?php } ?>
-                                <?php } ?>
-                                <button type="submit" class="btn btn-xs btn-default" style="margin-left: 10px;">
-                                    <?= isset($comment['deleted']) && $comment['deleted'] ? 'Show' : 'Hide' ?>
-                                </button>
-                            </form>
-                        <?php } ?>
+                                    <?php if ( $from_page == 'grade-detail' && !empty($from_user_id) ) { ?>
+                                        <input type="hidden" name="from" value="grade-detail">
+                                        <input type="hidden" name="user_id" value="<?= htmlentities($from_user_id) ?>">
+                                        <?php if ( !empty($grades_page) ) { ?>
+                                            <input type="hidden" name="page" value="<?= intval($grades_page) ?>">
+                                        <?php } ?>
+                                        <?php if ( !empty($grades_sort) ) { ?>
+                                            <input type="hidden" name="sort" value="<?= htmlentities($grades_sort) ?>">
+                                        <?php } ?>
+                                        <?php if ( !empty($grades_dir) ) { ?>
+                                            <input type="hidden" name="dir" value="<?= htmlentities($grades_dir) ?>">
+                                        <?php } ?>
+                                    <?php } ?>
+                                    <button type="submit" class="btn btn-xs" style="background: none; border: none; padding: 0; margin: 0 5px;" aria-label="<?= htmlentities($flag_alt) ?>" title="<?= htmlentities($flag_alt) ?>">
+                                        <span class="glyphicon glyphicon-flag" style="color: <?= $flag_color ?>; font-size: <?= $flag_size ?>; <?= $flag_style ?>"></span>
+                                    </button>
+                                </form>
+                            <?php } ?>
+                        </span>
                     </div>
                     <div class="comment-text" style="line-height: 1.6;">
                         <div class="comment-html-<?= $comment['comment_id'] ?>"></div>

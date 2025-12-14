@@ -22,12 +22,18 @@ $link_id = $LAUNCH->link->id;
 
 // Get pagination and sorting parameters
 $page = max(1, intval(U::get($_GET, 'page', 1)));
-$sort_col = U::get($_GET, 'sort', 'displayname');
+$sort_col = U::get($_GET, 'sort', '');
 $sort_dir = U::get($_GET, 'dir', 'asc');
 $valid_sort_cols = array('displayname', 'email', 'grade', 'updated_at', 'comments_given', 'comments_received', 'flags', 'deleted_comments');
-if (!in_array($sort_col, $valid_sort_cols)) {
-    $sort_col = 'displayname';
+
+// Default sort: flags DESC, then displayname ASC
+// If explicitly sorting on any column, use that column only (with displayname as secondary)
+$is_default_sort = empty($sort_col) || !in_array($sort_col, $valid_sort_cols);
+if ($is_default_sort) {
+    $sort_col = 'flags';
+    $sort_dir = 'desc';
 }
+
 if ($sort_dir != 'asc' && $sort_dir != 'desc') {
     $sort_dir = 'asc';
 }
@@ -46,9 +52,15 @@ $sort_sql_map = array(
     'deleted_comments' => 'COALESCE(dc.cnt, 0)'
 );
 // Use whitelist to prevent SQL injection
-$sort_sql = isset($sort_sql_map[$sort_col]) ? $sort_sql_map[$sort_col] : 'u.displayname';
+$sort_sql = isset($sort_sql_map[$sort_col]) ? $sort_sql_map[$sort_col] : 'COALESCE(fl.cnt, 0)';
 $sort_dir_sql = ($sort_dir == 'desc') ? 'DESC' : 'ASC';
-$order_by = $sort_sql . ' ' . $sort_dir_sql;
+
+// Build ORDER BY clause: primary sort, then displayname as secondary (except when already sorting by displayname)
+if ($sort_col == 'displayname') {
+    $order_by = $sort_sql . ' ' . $sort_dir_sql;
+} else {
+    $order_by = $sort_sql . ' ' . $sort_dir_sql . ', u.displayname ASC';
+}
 
 // Get total count for pagination (single query)
 $total_rows = $PDOX->rowDie(
