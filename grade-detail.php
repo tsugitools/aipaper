@@ -152,8 +152,29 @@ if ( isset($_POST['instSubmit']) || isset($_POST['instSubmitAdvance']) ) {
         return;
     }
 
+    // Get result_id for this user
+    $p = $CFG->dbprefix;
+    $result_row = $PDOX->rowDie(
+        "SELECT result_id FROM {$p}lti_result WHERE user_id = :UID AND link_id = :LID",
+        array(':UID' => $user_id, ':LID' => $LAUNCH->link->id)
+    );
+    $result_id = $result_row ? $result_row['result_id'] : null;
+    
+    // Store instructor points in database
+    if ( $result_id ) {
+        $PDOX->queryDie(
+            "UPDATE {$p}aipaper_result 
+             SET instructor_points = :POINTS, updated_at = NOW()
+             WHERE result_id = :RID",
+            array(
+                ':POINTS' => $instructor_earned,
+                ':RID' => $result_id
+            )
+        );
+    }
+    
     // Calculate overall grade using shared function with new instructor points
-    $points_data = calculatePoints($user_id, $LAUNCH->link->id, null, $instructor_earned);
+    $points_data = calculatePoints($user_id, $LAUNCH->link->id, $result_id, $instructor_earned);
     $earned_points = $points_data['earned_points'];
     $overall_points = $points_data['overall_points'];
     

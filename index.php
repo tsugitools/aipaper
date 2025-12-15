@@ -7,6 +7,8 @@ use \Tsugi\Util\U;
 use \Tsugi\Util\FakeName;
 use \Tsugi\Core\LTIX;
 use \Tsugi\Core\Settings;
+use \Tsugi\Core\Result;
+use \Tsugi\Util\LTI13;
 use \Tsugi\UI\SettingsForm;
 
 // No parameter means we require CONTEXT, USER, and LINK
@@ -42,7 +44,7 @@ if ( ! $result_id ) {
 
 // Load or create aipaper_result record
 $paper_row = $PDOX->rowDie(
-    "SELECT raw_submission, ai_enhanced_submission, submitted, flagged, flagged_by, json
+    "SELECT raw_submission, ai_enhanced_submission, submitted, flagged, flagged_by, json, updated_at, instructor_points
      FROM {$p}aipaper_result WHERE result_id = :RID",
     array(':RID' => $result_id)
 );
@@ -96,6 +98,73 @@ if ( !$USER->instructor ) {
         array(':UID' => $USER->id)
     );
     $total_comments_made = $total_comments_row ? intval($total_comments_row['cnt']) : 0;
+}
+
+// Auto-grade logic: Check if student should be auto-awarded full instructor points
+if ( !$USER->instructor && $is_submitted ) {
+    $instructor_points = Settings::linkGet('instructorpoints', 0);
+    $instructor_points = intval($instructor_points);
+    $auto_timeout = Settings::linkGet('auto_instructor_grade_timeout', 0);
+    $auto_timeout = intval($auto_timeout);
+    
+    // Only check if instructor points > 0 and timeout is set
+    if ( $instructor_points > 0 && $auto_timeout > 0 ) {
+        // Check if instructor points are already set in database
+        $instructor_points_earned = isset($paper_row['instructor_points']) && $paper_row['instructor_points'] !== null 
+            ? intval($paper_row['instructor_points']) 
+            : null;
+        
+        // Only auto-grade if instructor points are not already set (i.e., instructor hasn't graded yet)
+        if ( $instructor_points_earned === null ) {
+            // Get submission timestamp
+            $submission_timestamp = isset($paper_row['updated_at']) ? strtotime($paper_row['updated_at']) : null;
+            
+            if ( $submission_timestamp ) {
+                $current_timestamp = time();
+                $seconds_since_submission = $current_timestamp - $submission_timestamp;
+                
+                // If timeout has passed, auto-award full instructor points
+                if ( $seconds_since_submission >= $auto_timeout ) {
+                    // Set instructor points to max value
+                    $instructor_points_earned = $instructor_points;
+                    
+                    // Store instructor points in database
+                    $PDOX->queryDie(
+                        "UPDATE {$p}aipaper_result 
+                         SET instructor_points = :POINTS, updated_at = NOW()
+                         WHERE result_id = :RID",
+                        array(
+                            ':POINTS' => $instructor_points_earned,
+                            ':RID' => $result_id
+                        )
+                    );
+                    
+                    // Recalculate overall points using the stored instructor points
+                    $points_data = calculatePoints($USER->id, $LAUNCH->link->id, $result_id, $instructor_points_earned);
+                    $earned_points = $points_data['earned_points'];
+                    $overall_points = $points_data['overall_points'];
+                    
+                    // Calculate overall grade as earned_points / overall_points (0.0 to 1.0 for LTI)
+                    if ( $overall_points > 0 ) {
+                        $computed_grade = floatval($earned_points) / floatval($overall_points);
+                    } else {
+                        $computed_grade = 0.0;
+                    }
+                    
+                    // Send the computed grade to LTI
+                    $result = Result::lookupResultBypass($USER->id);
+                    $result['grade'] = -1; // Force resend
+                    $debug_log = array();
+                    $extra13 = array(
+                        LTI13::ACTIVITY_PROGRESS => LTI13::ACTIVITY_PROGRESS_COMPLETED,
+                        LTI13::GRADING_PROGRESS => LTI13::GRADING_PROGRESS_FULLYGRADED,
+                    );
+                    
+                    $LAUNCH->result->gradeSend($computed_grade, $result, $debug_log, $extra13);
+                }
+            }
+        }
+    }
 }
 
 // Calculate overall_points and earned_points using shared function
@@ -664,7 +733,7 @@ if ( $USER->instructor ) {
     SettingsForm::checkbox('userealnames', __('Use actual student names instead of generated names'));
     SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
     SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
-    // TODO: Add an auto-grade ellapsed time (might not need ths - but think about it)
+    SettingsForm::text('auto_instructor_grade_timeout', __('Auto Instructor Grade Timeout (seconds) - automatically award full instructor points if instructor has not graded within this time after submission (typically left 0 or blank).  Two days is 172800 seconds.'));
     SettingsForm::dueDate();
     SettingsForm::done();
     SettingsForm::end();

@@ -47,7 +47,7 @@ function calculatePoints($user_id, $link_id, $result_id = null, $instructor_earn
     if ( $result_id ) {
         // Check if submitted
         $paper_row = $PDOX->rowDie(
-            "SELECT submitted FROM {$p}aipaper_result WHERE result_id = :RID",
+            "SELECT submitted, instructor_points FROM {$p}aipaper_result WHERE result_id = :RID",
             array(':RID' => $result_id)
         );
         if ( $paper_row && ($paper_row['submitted'] == 1 || $paper_row['submitted'] == true) ) {
@@ -67,12 +67,15 @@ function calculatePoints($user_id, $link_id, $result_id = null, $instructor_earn
             $earned_points += ($comment_points * $comments_that_count);
         }
         
-        // Get instructor points from grade (0.0-1.0 stored in LTI) or use provided value
+        // Get instructor points: use provided value, or read from database, or derive from grade
         if ( $instructor_earned !== null ) {
             // Use provided instructor points
             $earned_points += intval($instructor_earned);
+        } else if ( $paper_row && isset($paper_row['instructor_points']) && $paper_row['instructor_points'] !== null ) {
+            // Read from database
+            $earned_points += intval($paper_row['instructor_points']);
         } else {
-            // Read from grade
+            // Fall back to deriving from grade
             $result = Result::lookupResultBypass($user_id);
             if ( isset($result['grade']) && $result['grade'] !== null && $instructor_points > 0 ) {
                 $grade = floatval($result['grade']);

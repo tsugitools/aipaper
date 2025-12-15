@@ -105,14 +105,9 @@ array( "{$CFG->dbprefix}aipaper_like",
 // Database upgrade
 $DATABASE_UPGRADE = function($oldversion) {
     global $CFG, $PDOX;
+    $p = $CFG->dbprefix;
 
-    // Initial version
-    if ( $oldversion < 202512120000 ) {
-        // Tables created in initial install
-        return 202512120000;
-    }
-
-    return 202512120000;
+    return 202512130000;
 }; // Don't forget the semicolon on anonymous functions :)
 
 // Do the actual migration if we are not in admin/upgrade.php
