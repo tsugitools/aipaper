@@ -534,11 +534,7 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         // If AI prompt is blank, reset to default
         if ( empty(trim(strip_tags($ai_prompt))) ) {
             // Create default prompt with HTML formatting (for CKEditor)
-            if ( !empty($instructions) ) {
-                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:</p>\n\n<p>-- Instructions Included Here --</p>\n\n<p>Provide a brief paragraph (approximately 200 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
-            } else {
-                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 200 words or less). Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
-            }
+            $ai_prompt = "<p>You are reviewing a student's paper submission.</p>\n\n<p>Provide a brief paragraph (approximately 200 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>\n\n<p>The following are the instructions for the assignment:</p>\n\n<p>-- Instructions Included Here --</p>\n\n";
         }
         if ( isset($LAUNCH->link->id) ) {
             $p = $CFG->dbprefix;
@@ -583,7 +579,7 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         if ( $is_submit ) {
             $success_msg = 'Paper submitted';
             if ( $resubmit_allowed ) {
-                $success_msg .= '. You can reset your submission from the Main page if you need to make changes.';
+                $success_msg .= '. You can reset your submission if you need to make changes.';
             } else {
                 $success_msg .= '. Your submission is now locked and cannot be edited.';
             }
@@ -672,33 +668,42 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
 $menu = new \Tsugi\UI\MenuSet();
 
 if ( $LAUNCH->user->instructor ) {
-    $menu->addLeft(__('Student Data'), 'grades');
-    if ( $CFG->launchactivity ) {
-        $menu->addLeft(__('Analytics'), 'analytics');
-    }
     $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
-    $menu->addLeft(__('Prompt'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_prompt" style="cursor: pointer;"');
+    // Only show AI Prompt if AI is configured
+    if ( isAIConfigured() ) {
+        $menu->addLeft(__('AI Prompt'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_prompt" style="cursor: pointer;"');
+    }
     $submenu = new \Tsugi\UI\Menu();
+    $submenu->addLink(__('Student Data'), 'grades');
+    if ( $CFG->launchactivity ) {
+        $submenu->addLink(__('Analytics'), 'analytics');
+    }
     $submenu->addLink(__('Settings'), '#', /* push */ false, SettingsForm::attr());
     // Only show test data generator if key is '12345'
     $key = $LAUNCH->key->key ?? '';
     if ( $key === '12345' ) {
         $submenu->addLink(__('Generate Test Data'), 'testdata.php');
     }
-    $menu->addRight(__('Documentation'), 'documentation.html', /* push */ false, 'target="_blank"');
     $menu->addRight(__('Save'), '#', /* push */ false, 'id="menu-save-instructor-btn" style="cursor: pointer; font-weight: bold;"');
+    $menu->addRight(__('Documentation'), 'documentation.html', /* push */ false, 'target="_blank"');
     $menu->addRight(__('Instructor'), $submenu, /* push */ false);
 } else {
     // Add navigation items to menu
-    $menu->addLeft(__('Main'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="main" style="cursor: pointer;"');
-    $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
-    // Only show Paper and Paper+AI if not submitted
     if ( !$is_submitted ) {
+        // When not submitted: Paper, Paper+AI, Instructions on left; Save Draft, Submit Paper on right
         $menu->addLeft(__('Paper'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="submission" style="cursor: pointer;"');
         $menu->addLeft(__('Paper+AI'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_enhanced" style="cursor: pointer;"');
-    }
-    // Show Review if submitted
-    if ( $is_submitted ) {
+        $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
+        // Add Save and Submit buttons to menu if student can edit
+        if ( $can_edit ) {
+            $menu->addRight(__('Save Draft'), '#', /* push */ false, 'id="menu-save-btn" style="cursor: pointer;"');
+            $submit_text = __('Submit Paper');
+            $menu->addRight($submit_text, '#', /* push */ false, 'id="menu-submit-btn" style="cursor: pointer; font-weight: bold;"');
+        }
+    } else {
+        // When submitted: Main, Instructions, Review on left
+        $menu->addLeft(__('Main'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="main" style="cursor: pointer;"');
+        $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
         $menu->addLeft(__('Review'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="review" style="cursor: pointer;"');
     }
     
@@ -706,12 +711,6 @@ if ( $LAUNCH->user->instructor ) {
     // Add Reset Submission button if submitted and resubmit is allowed
     if ( $is_submitted && $resubmit_allowed ) {
         $menu->addRight(__('Reset Submission'), '#', /* push */ false, 'id="menu-reset-btn" style="cursor: pointer; color: #f0ad4e;"');
-    }
-    // Add Save and Submit buttons to menu if student can edit
-    if ( $can_edit ) {
-        $menu->addRight(__('Save Draft'), '#', /* push */ false, 'id="menu-save-btn" style="cursor: pointer;"');
-        $submit_text = __('Submit Paper');
-        $menu->addRight($submit_text, '#', /* push */ false, 'id="menu-submit-btn" style="cursor: pointer; font-weight: bold;"');
     }
 }
 
@@ -782,7 +781,6 @@ if ( U::strlen($inst_note) > 0 ) {
 
 <?php if ( $USER->instructor ) { ?>
     <!-- Instructor: Tabbed interface -->
-    <?php $OUTPUT->welcomeUserCourse(); ?>
     <?php if ( $dueDate->message ) { ?>
         <p style="color:red;"><?= htmlentities($dueDate->message) ?></p>
     <?php } ?>
@@ -790,52 +788,40 @@ if ( U::strlen($inst_note) > 0 ) {
     <form method="post" id="instructor_form">
         <!-- Instructions section -->
         <div class="student-section active" id="section-instructions">
-            <h3>Instructions / Rubric</h3>
+            <p>Please enter the instructions for the assignment here.  This will be used to generate feedback for the students.</p>
             <div class="ckeditor-container">
                 <textarea name="instructions" id="editor_instructions"><?= htmlentities($instructions ?? '') ?></textarea>
             </div>
         </div>
         
-        <!-- AI Prompt section -->
+        <!-- AI Prompt section (only shown if AI is configured) -->
+        <?php if ( isAIConfigured() ) { ?>
         <div class="student-section" id="section-ai_prompt">
             <?php 
             // Get or create default AI prompt (use HTML formatting for CKEditor)
-            if ( empty($ai_prompt) && !empty($instructions) ) {
+            if ( empty($ai_prompt) ) {
                 // Default prompt format with placeholder (HTML formatted)
-                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:</p>\n\n<p>-- Instructions Included Here --</p>\n\n<p>Provide a brief paragraph (approximately 200 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
-            } else if ( empty($ai_prompt) ) {
-                // Fallback default prompt (HTML formatted)
-                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 200 words or less). Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
+                $ai_prompt = "<p>You are reviewing a student's paper submission.</p>\n\n<p>Provide a brief paragraph (approximately 200 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>\n\n<p>The following are the instructions for the assignment:</p>\n\n<p>-- Instructions Included Here --</p>\n\n";
             }
             ?>
-            <h3>AI Prompt</h3>
             <p><em>This prompt is sent to the AI service when generating feedback comments. Use <strong>-- Instructions Included Here --</strong> as a placeholder where you want the assignment instructions to be inserted automatically.</em></p>
             <div class="ckeditor-container">
                 <textarea name="ai_prompt" id="editor_ai_prompt"><?= htmlentities($ai_prompt) ?></textarea>
             </div>
         </div>
+        <?php } ?>
         <!-- Hidden submit button for instructor form -->
         <input type="submit" name="save_instructions" id="hidden-save-instructor-btn" style="display: none;">
     </form>
 <?php } else { ?>
     <!-- Student: Sections with Tsugi menu navigation -->
     <form method="post" id="paper_form">
-    <div class="student-section active" id="section-main">
-        <h3>
-        <?php $OUTPUT->welcomeUserCourse(); ?>
-</h3>
+    <div class="student-section <?= $is_submitted ? 'active' : '' ?>" id="section-main">
         <?php if ( $dueDate->message ) { ?>
             <p style="color:red;"><?= htmlentities($dueDate->message) ?></p>
         <?php } ?>
         <?php if ( $is_submitted ) { ?>
-            <div class="alert alert-success" style="margin-top: 20px;">
-                <strong>Status:</strong> Your paper has been submitted.
-            </div>
-            
             <div style="margin-top: 20px;">
-                <?php if ( $overall_points > 0 ) { ?>
-                    <p><strong>Points:</strong> <?= $earned_points ?>/<?= $overall_points ?></p>
-                <?php } ?>
                 <p><strong>Review count:</strong> 
                 <?php if ( $min_comments == 0 ) { ?>
                     <?= $reviewed_count ?>
@@ -845,6 +831,9 @@ if ( U::strlen($inst_note) > 0 ) {
                     <?= $reviewed_count ?>
                 <?php } ?>
                 </p>
+                <?php if ( $overall_points > 0 ) { ?>
+                    <p><strong>Points:</strong> <?= $earned_points ?>/<?= $overall_points ?></p>
+                <?php } ?>
             </div>
             
             <div style="margin-top: 30px;">
@@ -949,15 +938,24 @@ if ( U::strlen($inst_note) > 0 ) {
     </div>
     
     <div class="student-section" id="section-instructions">
-        <h3>Instructions / Rubric</h3>
-        <div class="ckeditor-container">
-            <div id="display_instructions"><?= htmlentities($instructions ?? '') ?></div>
-        </div>
-        <p><em>Read-only instructions from your instructor.</em></p>
+        <?php if ( is_string($instructions) && U::strlen($instructions) > 0 ) { ?>
+            <div class="ckeditor-container">
+                <div id="display_instructions"><?= htmlentities($instructions ?? 'Instructions not yet available') ?></div>
+            </div>
+        <?php } else { ?>
+            <div class="alert alert-info">Instructions not yet available</div>
+        <?php } ?>
     </div>
     
-    <div class="student-section" id="section-submission">
-        <p>Write your paper here. You can use AI to research and write your paper.  Do not use AI to write, rewrite or enhance your paper in any way. Spelling errors, grammar errors, and other minor mistakes are OK. This is your original work.</p>
+    <div class="student-section <?= !$is_submitted ? 'active' : '' ?>" id="section-submission">
+        <p>
+            Write your paper here. You can use AI to research and write your paper.  Do not use AI to write,
+            rewrite or enhance your paper in any way.
+            Spelling errors, grammar errors, and other minor mistakes are OK. This is your original work.
+            If you want to use AI to write, rewrite or enhance your paper in any way, please
+            include it under Paper+AI.  Reviewers and graders will look at both.
+            AI (if configured) will be used to generate feedback on the non-AI version of your paper.
+        </p>
         <?php if ( !$can_edit ) { ?>
             <div class="alert alert-info">Your submission has been submitted and cannot be edited.</div>
             <div class="ckeditor-container">
@@ -971,7 +969,8 @@ if ( U::strlen($inst_note) > 0 ) {
     </div>
     
     <div class="student-section" id="section-ai_enhanced">
-        <p>Optionally, you can use AI to enhance your paper and include the AI Enhanced version of your paper here.  If both are submitted reviewrs and graders will look at both.</p>
+        <p>Optionally, you can use AI to enhance your paper and include the AI-improved version of your paper here.
+        If both are submitted reviewers and graders will look at both.</p>
         <?php if ( !$can_edit ) { ?>
             <div class="alert alert-info">Your AI enhanced submission cannot be edited.</div>
             <div class="ckeditor-container">
@@ -1365,14 +1364,19 @@ function initializeNavigation() {
             // Instructor: Set Instructions as active by default
             $('.tsugi-nav-link[data-section="instructions"]').addClass('active');
         <?php } else { ?>
-            // Student: Set Main as active by default, unless review_page is in URL
+            // Student: Set default active section
             <?php if ( isset($_GET['review_page']) ) { ?>
                 // Auto-navigate to Review section if review_page parameter is present
                 $('.tsugi-nav-link').removeClass('active');
                 $('.student-section').removeClass('active');
                 $('.tsugi-nav-link[data-section="review"]').addClass('active');
                 $('#section-review').addClass('active');
+            <?php } else if ( !$is_submitted ) { ?>
+                // When paper is not submitted, default to Paper tab
+                $('.tsugi-nav-link[data-section="submission"]').addClass('active');
+                $('#section-submission').addClass('active');
             <?php } else { ?>
+                // When paper is submitted, default to Main tab
                 $('.tsugi-nav-link[data-section="main"]').addClass('active');
             <?php } ?>
         <?php } ?>
