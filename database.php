@@ -22,6 +22,7 @@ array( "{$CFG->dbprefix}aipaper_result",
     raw_submission TEXT NULL,
     ai_enhanced_submission TEXT NULL,
     submitted    TINYINT(1) NOT NULL DEFAULT 0,
+    instructor_points   TINYINT(1) NOT NULL DEFAULT 0,
     flagged      TINYINT(1) NOT NULL DEFAULT 0,
     flagged_by   INTEGER NULL,  -- user_id who flagged this submission
     json         TEXT NULL,
