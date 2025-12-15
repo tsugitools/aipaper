@@ -535,9 +535,9 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         if ( empty(trim(strip_tags($ai_prompt))) ) {
             // Create default prompt with HTML formatting (for CKEditor)
             if ( !empty($instructions) ) {
-                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:</p>\n\n<p>-- Instructions Included Here --</p>\n\n<p>Provide a brief paragraph (approximately 500 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
+                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:</p>\n\n<p>-- Instructions Included Here --</p>\n\n<p>Provide a brief paragraph (approximately 200 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
             } else {
-                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 500 words or less). Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
+                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 200 words or less). Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
             }
         }
         if ( isset($LAUNCH->link->id) ) {
@@ -802,10 +802,10 @@ if ( U::strlen($inst_note) > 0 ) {
             // Get or create default AI prompt (use HTML formatting for CKEditor)
             if ( empty($ai_prompt) && !empty($instructions) ) {
                 // Default prompt format with placeholder (HTML formatted)
-                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:</p>\n\n<p>-- Instructions Included Here --</p>\n\n<p>Provide a brief paragraph (approximately 500 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
+                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback based on the following assignment instructions:</p>\n\n<p>-- Instructions Included Here --</p>\n\n<p>Provide a brief paragraph (approximately 200 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
             } else if ( empty($ai_prompt) ) {
                 // Fallback default prompt (HTML formatted)
-                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 500 words or less). Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
+                $ai_prompt = "<p>You are reviewing a student's paper submission. Please provide constructive feedback in a brief paragraph (approximately 200 words or less). Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>";
             }
             ?>
             <h3>AI Prompt</h3>

@@ -75,24 +75,56 @@ function generateAIComment($instructions, $paper_text, $api_url = null) {
     $api_key = Settings::linkGet('ai_api_key', '');
     $has_api_key = !empty($api_key);
     
-    error_log("AI Comment: Starting API request - user_id: {$user_id}, email: {$user_email}, link_id: {$link_id}, api_url: '{$api_url}', has_api_key: " . ($has_api_key ? 'yes' : 'no'));
+    // Check if this is an OpenAI endpoint
+    $is_openai = (strpos($api_url, 'api.openai.com') !== false || strpos($api_url, 'openai.com') !== false);
     
-    // Prepare the request payload
-    $payload = array(
-        'instructions' => $instructions,
-        'paper' => $paper_text,
-        'max_length' => 500  // Request a short paragraph
-    );
+    error_log("AI Comment: Starting API request - user_id: {$user_id}, email: {$user_email}, link_id: {$link_id}, api_url: '{$api_url}', has_api_key: " . ($has_api_key ? 'yes' : 'no') . ", is_openai: " . ($is_openai ? 'yes' : 'no'));
+    
+    // Prepare the request payload based on API type
+    if ( $is_openai ) {
+        // OpenAI API format
+        $system_prompt = "You are reviewing a student's paper submission. Provide constructive feedback in a brief paragraph (approximately 200 words or less). Focus on strengths, areas for improvement, and specific suggestions for revision. Be encouraging but honest, and reference specific parts of the paper when possible.";
+        
+        if ( !empty(trim($instructions)) ) {
+            $system_prompt .= "\n\nAssignment Instructions:\n" . $instructions;
+        }
+        
+        $payload = array(
+            'model' => 'gpt-4.1-mini',
+            'messages' => array(
+                array(
+                    'role' => 'system',
+                    'content' => $system_prompt
+                ),
+                array(
+                    'role' => 'user',
+                    'content' => "Please review the following paper:\n\n" . $paper_text
+                )
+            ),
+            'max_tokens' => 250,
+            'temperature' => 0.7
+        );
+    } else {
+        // Custom API format (original)
+        $payload = array(
+            'instructions' => $instructions,
+            'paper' => $paper_text,
+            'max_length' => 200  // Request a short paragraph
+        );
+    }
+    
+    // Prepare headers
+    $headers = array('Content-Type: application/json');
+    if ( !empty($api_key) ) {
+        $headers[] = 'Authorization: Bearer ' . $api_key;
+    }
     
     // Make API call
     $ch = curl_init($api_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-        'Content-Type: application/json',
-        !empty($api_key) ? 'Authorization: Bearer ' . $api_key : ''
-    ));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30); // 30 second timeout
     
     $response = curl_exec($ch);
@@ -123,19 +155,50 @@ function generateAIComment($instructions, $paper_text, $api_url = null) {
     
     $response_data = json_decode($response, true);
     
-    if ( !$response_data || !isset($response_data['comment']) ) {
-        $response_preview = substr($response, 0, 200);
-        $error_log_msg = "AI Comment: API request failed - Invalid response format - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
-        error_log($error_log_msg);
-        return array(
-            'success' => false, 
-            'error' => 'Invalid API response format',
-            'error_log' => $error_log_msg
-        );
+    // Parse response based on API type
+    if ( $is_openai ) {
+        // OpenAI response format: choices[0].message.content
+        if ( !$response_data || !isset($response_data['choices']) || !is_array($response_data['choices']) || empty($response_data['choices']) ) {
+            $response_preview = substr($response, 0, 200);
+            $error_log_msg = "AI Comment: OpenAI API request failed - Invalid response format - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
+            error_log($error_log_msg);
+            return array(
+                'success' => false, 
+                'error' => 'Invalid OpenAI API response format',
+                'error_log' => $error_log_msg
+            );
+        }
+        
+        $comment = $response_data['choices'][0]['message']['content'] ?? '';
+        if ( empty($comment) ) {
+            $response_preview = substr($response, 0, 200);
+            $error_log_msg = "AI Comment: OpenAI API request failed - Empty comment in response - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
+            error_log($error_log_msg);
+            return array(
+                'success' => false, 
+                'error' => 'OpenAI API returned empty comment',
+                'error_log' => $error_log_msg
+            );
+        }
+        
+        error_log("AI Comment: OpenAI API request successful - user_id: {$user_id}, api_url: '{$api_url}', comment_length: " . strlen($comment));
+        return array('success' => true, 'comment' => trim($comment));
+    } else {
+        // Custom API response format: comment field
+        if ( !$response_data || !isset($response_data['comment']) ) {
+            $response_preview = substr($response, 0, 200);
+            $error_log_msg = "AI Comment: API request failed - Invalid response format - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
+            error_log($error_log_msg);
+            return array(
+                'success' => false, 
+                'error' => 'Invalid API response format',
+                'error_log' => $error_log_msg
+            );
+        }
+        
+        error_log("AI Comment: API request successful - user_id: {$user_id}, api_url: '{$api_url}', comment_length: " . strlen($response_data['comment']));
+        return array('success' => true, 'comment' => $response_data['comment']);
     }
-    
-    error_log("AI Comment: API request successful - user_id: {$user_id}, api_url: '{$api_url}', comment_length: " . strlen($response_data['comment']));
-    return array('success' => true, 'comment' => $response_data['comment']);
 }
 
 /**
