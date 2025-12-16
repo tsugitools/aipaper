@@ -24,7 +24,7 @@ This tool is designed to collect and grade short papers that were written with t
 
 - **Resubmission**: Optional ability for students to reset and resubmit their papers (configurable by instructor)
 
-- **Auto-grading**: Maximum duration feature that allows students to complete grading if instructor hasn't graded within a set time period
+- **Auto-grading**: Automatically sends a grade of 1.0 (100%) within a configured time period after submission (only if overall_points > 0)
 
 ## Configuration Options
 

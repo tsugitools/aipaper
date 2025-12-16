@@ -183,7 +183,7 @@
     <li><strong>Allow students to reset and resubmit their papers:</strong> Enables the Reset Submission feature. When a student resets, their submission becomes editable again and comments are soft-deleted (hidden from students but visible to instructors).</li>
     <li><strong>AI API URL:</strong> Optional endpoint URL for generating AI comments. Leave empty to use the built-in test endpoint. For OpenAI, use: <code>https://api.openai.com/v1/chat/completions</code></li>
     <li><strong>AI API Key:</strong> Optional authentication key for the AI API. Required if using an external AI service like OpenAI.</li>
-    <li><strong>Auto Instructor Grade Timeout:</strong> Automatically award full instructor points if instructor has not graded within this time (in seconds) after submission. Typically left 0 or blank. Two days = 172800 seconds.</li>
+    <li><strong>Auto Grade Timeout:</strong> Automatically send a grade of 1.0 (100%) after this time (in seconds) has elapsed since submission if overall_points > 0. This ensures students get full credit even if they cannot complete enough reviews due to insufficient submissions. Typically left 0 or blank. Two days = 172800 seconds.</li>
     <li><strong>Due date:</strong> Optional due date for the assignment</li>
 </ul>
 
@@ -240,7 +240,7 @@
     <li>The auto instructor grade timeout expires (if configured)</li>
 </ul>
 <p>Grades will only be sent if overall_points > 0.</p>
-<p><strong>Auto Instructor Grade Timeout:</strong> If this setting is configured (non-zero), students who have submitted their papers will automatically receive full instructor points if the instructor has not manually graded them within the specified timeout period. This ensures timely grade reporting even if instructors are unable to manually grade every submission.</p>
+<p><strong>Auto Grade Timeout:</strong> If this setting is configured (non-zero) and overall_points > 0, students who have submitted their papers will automatically receive a grade of 1.0 (100%) after the specified timeout period has elapsed since submission. This ensures students get full credit even if they cannot complete enough peer reviews due to insufficient submissions available for review. The grade is sent directly to the LMS without modifying instructor points in the database, and applies regardless of whether the instructor has manually graded.</p>
 
 <h4>Instructor Features</h4>
 <ul>

@@ -63,8 +63,9 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
   - A student views their main page (if overall_points > 0)
   - A student submits a comment
   - An instructor assigns or updates instructor points
+  - Auto-grade timeout expires (sends grade of 1.0 if overall_points > 0)
 - Grades are only sent if overall_points > 0
-- Grade is calculated as earned_points / overall_points (0.0 to 1.0 for LTI)
+- Grade is calculated as earned_points / overall_points (0.0 to 1.0 for LTI), except when auto-grade timeout triggers (sends 1.0 directly)
 
 ### Reset Submission
 
@@ -149,20 +150,6 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
 
 **Note**: Overall points = instructor_points + submit_points + (comment_points × min_comments). Grades will only be sent for this activity if overall_points > 0.
 
-## Not Yet Implemented
-
-The following features from the original design are not yet implemented:
-- AI API integration (automatic AI comment generation on submission)
-- Auto-grading after maximum duration (time-based auto-grade feature)
-- Tabbed dialog interface (currently uses menu-based navigation)
-
-## Recently Implemented Features
-
-- **Flag System**: Comments and submissions can be flagged by anyone; only instructors can unflag. Flagged items are displayed with red flag icons and included in flag counts.
-- **Comment Moderation**: Instructors can hide/show individual comments using trash can icons (soft-delete toggle).
-- **Generated Name Search**: When `userealnames` is false, instructors can search by generated name. Results appear in the main Student Data table with sorting disabled.
-- **Enhanced Student Data Page**: Pagination (20 per page), sortable columns, search by name/email, search by generated name, flag counts, deleted comment counts.
-- **Navigation Context Preservation**: Pagination, sorting, and search state preserved when navigating between grades.php, grade-detail.php, and review.php.
 
 ## Technical Details
 

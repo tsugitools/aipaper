@@ -100,68 +100,45 @@ if ( !$USER->instructor ) {
     $total_comments_made = $total_comments_row ? intval($total_comments_row['cnt']) : 0;
 }
 
-// Auto-grade logic: Check if student should be auto-awarded full instructor points
+// Auto-grade logic: Send grade of 1.0 after timeout if overall_points > 0
+// This ensures students get full credit even if they can't complete enough reviews
 if ( !$USER->instructor && $is_submitted ) {
-    $instructor_points = Settings::linkGet('instructorpoints', 0);
-    $instructor_points = intval($instructor_points);
     $auto_timeout = Settings::linkGet('auto_instructor_grade_timeout', 0);
     $auto_timeout = intval($auto_timeout);
     
-    // Only check if instructor points > 0 and timeout is set
-    if ( $instructor_points > 0 && $auto_timeout > 0 ) {
-        // Check if instructor points are already set in database
-        $instructor_points_earned = isset($paper_row['instructor_points']) && $paper_row['instructor_points'] !== null 
-            ? intval($paper_row['instructor_points']) 
-            : null;
+    // Calculate overall_points to check if auto-grading should apply
+    $instructor_points = Settings::linkGet('instructorpoints', 0);
+    $instructor_points = intval($instructor_points);
+    $submit_points = Settings::linkGet('submitpoints', 0);
+    $submit_points = intval($submit_points);
+    $comment_points = Settings::linkGet('commentpoints', 0);
+    $comment_points = intval($comment_points);
+    $min_comments = Settings::linkGet('mincomments', 0);
+    $min_comments = intval($min_comments);
+    $overall_points = $instructor_points + $submit_points + ($comment_points * $min_comments);
+    
+    // Only check if overall_points > 0 and timeout is set
+    if ( $overall_points > 0 && $auto_timeout > 0 ) {
+        // Get submission timestamp
+        $submission_timestamp = isset($paper_row['updated_at']) ? strtotime($paper_row['updated_at']) : null;
         
-        // Only auto-grade if instructor points are not already set (i.e., instructor hasn't graded yet)
-        if ( $instructor_points_earned === null ) {
-            // Get submission timestamp
-            $submission_timestamp = isset($paper_row['updated_at']) ? strtotime($paper_row['updated_at']) : null;
+        if ( $submission_timestamp ) {
+            $current_timestamp = time();
+            $seconds_since_submission = $current_timestamp - $submission_timestamp;
             
-            if ( $submission_timestamp ) {
-                $current_timestamp = time();
-                $seconds_since_submission = $current_timestamp - $submission_timestamp;
+            // If timeout has passed, send grade of 1.0 (100%) regardless of instructor grading
+            // This ensures students get credit even if they can't complete enough reviews
+            if ( $seconds_since_submission >= $auto_timeout ) {
+                // Send grade of 1.0 directly to LTI
+                $result = Result::lookupResultBypass($USER->id);
+                $result['grade'] = -1; // Force resend
+                $debug_log = array();
+                $extra13 = array(
+                    LTI13::ACTIVITY_PROGRESS => LTI13::ACTIVITY_PROGRESS_COMPLETED,
+                    LTI13::GRADING_PROGRESS => LTI13::GRADING_PROGRESS_FULLYGRADED,
+                );
                 
-                // If timeout has passed, auto-award full instructor points
-                if ( $seconds_since_submission >= $auto_timeout ) {
-                    // Set instructor points to max value
-                    $instructor_points_earned = $instructor_points;
-                    
-                    // Store instructor points in database
-                    $PDOX->queryDie(
-                        "UPDATE {$p}aipaper_result 
-                         SET instructor_points = :POINTS, updated_at = NOW()
-                         WHERE result_id = :RID",
-                        array(
-                            ':POINTS' => $instructor_points_earned,
-                            ':RID' => $result_id
-                        )
-                    );
-                    
-                    // Recalculate overall points using the stored instructor points
-                    $points_data = calculatePoints($USER->id, $LAUNCH->link->id, $result_id, $instructor_points_earned);
-                    $earned_points = $points_data['earned_points'];
-                    $overall_points = $points_data['overall_points'];
-                    
-                    // Calculate overall grade as earned_points / overall_points (0.0 to 1.0 for LTI)
-                    if ( $overall_points > 0 ) {
-                        $computed_grade = floatval($earned_points) / floatval($overall_points);
-                    } else {
-                        $computed_grade = 0.0;
-                    }
-                    
-                    // Send the computed grade to LTI
-                    $result = Result::lookupResultBypass($USER->id);
-                    $result['grade'] = -1; // Force resend
-                    $debug_log = array();
-                    $extra13 = array(
-                        LTI13::ACTIVITY_PROGRESS => LTI13::ACTIVITY_PROGRESS_COMPLETED,
-                        LTI13::GRADING_PROGRESS => LTI13::GRADING_PROGRESS_FULLYGRADED,
-                    );
-                    
-                    $LAUNCH->result->gradeSend($computed_grade, $result, $debug_log, $extra13);
-                }
+                $LAUNCH->result->gradeSend(1.0, $result, $debug_log, $extra13);
             }
         }
     }
@@ -704,7 +681,7 @@ if ( $USER->instructor ) {
     SettingsForm::checkbox('userealnames', __('Use actual student names instead of generated names'));
     SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
     SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
-    SettingsForm::text('auto_instructor_grade_timeout', __('Auto Instructor Grade Timeout (seconds) - automatically award full instructor points if instructor has not graded within this time after submission (typically left 0 or blank).  Two days is 172800 seconds.'));
+    SettingsForm::text('auto_instructor_grade_timeout', __('Auto Grade Timeout (seconds) - automatically send a grade of 1.0 (100%) after this time has elapsed since submission if overall_points > 0. This ensures students get full credit even if they cannot complete enough reviews due to insufficient submissions. Typically left 0 or blank. Two days is 172800 seconds.'));
     SettingsForm::dueDate();
     SettingsForm::done();
     SettingsForm::end();
