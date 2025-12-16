@@ -353,18 +353,8 @@ if ( $is_submitted ) {
 // Load instructions from settings
 $instructions = Settings::linkGet('instructions', '');
 
-// Load AI prompt from database (per link)
-$ai_prompt = '';
-if ( $USER->instructor && isset($LAUNCH->link->id) ) {
-    $p = $CFG->dbprefix;
-    $link_row = $PDOX->rowDie(
-        "SELECT ai_prompt FROM {$p}lti_link WHERE link_id = :LID",
-        array(':LID' => $LAUNCH->link->id)
-    );
-    if ( $link_row && isset($link_row['ai_prompt']) ) {
-        $ai_prompt = $link_row['ai_prompt'];
-    }
-}
+// Load AI prompt from settings (per link)
+$ai_prompt = Settings::linkGet('ai_prompt', '');
 
 // Handle toggle comment (soft delete/un-delete)
 if ( count($_POST) > 0 && isset($_POST['toggle_comment']) && $USER->instructor ) {
@@ -529,23 +519,14 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         $instructions = U::get($_POST, 'instructions', '');
         Settings::linkSet('instructions', $instructions);
         
-        // Save AI prompt to database
+        // Save AI prompt to settings
         $ai_prompt = U::get($_POST, 'ai_prompt', '');
         // If AI prompt is blank, reset to default
         if ( empty(trim(strip_tags($ai_prompt))) ) {
             // Create default prompt with HTML formatting (for CKEditor)
             $ai_prompt = "<p>You are reviewing a student's paper submission.</p>\n\n<p>Provide a brief paragraph (approximately 200 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>\n\n<p>The following are the instructions for the assignment:</p>\n\n<p>-- Instructions Included Here --</p>\n\n";
         }
-        if ( isset($LAUNCH->link->id) ) {
-            $p = $CFG->dbprefix;
-            $PDOX->queryDie(
-                "UPDATE {$p}lti_link SET ai_prompt = :PROMPT WHERE link_id = :LID",
-                array(
-                    ':PROMPT' => $ai_prompt,
-                    ':LID' => $LAUNCH->link->id
-                )
-            );
-        }
+        Settings::linkSet('ai_prompt', $ai_prompt);
     }
 
     // Check if was already submitted (MySQL returns 0/1, not boolean)
@@ -596,26 +577,17 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         // Use AI prompt if set, otherwise fall back to instructions
         $instructions = Settings::linkGet('instructions', '');
         $prompt_to_use = $instructions;
-        if ( isset($LAUNCH->link->id) ) {
-            $p = $CFG->dbprefix;
-            $link_row = $PDOX->rowDie(
-                "SELECT ai_prompt FROM {$p}lti_link WHERE link_id = :LID",
-                array(':LID' => $LAUNCH->link->id)
-            );
-            if ( $link_row && !empty($link_row['ai_prompt']) ) {
-                $prompt_to_use = $link_row['ai_prompt'];
-                // Replace placeholder with actual instructions
-                // Use regex to find the placeholder in various HTML contexts and preserve formatting
-                // Match the placeholder text regardless of surrounding HTML tags
-                $placeholder_pattern = '/--\s*Instructions\s+Included\s+Here\s*--/i';
-                // Find all matches and replace, preserving the HTML structure around it
-                $prompt_to_use = preg_replace($placeholder_pattern, $instructions, $prompt_to_use);
-            } else {
-                // Fallback to instructions if no AI prompt is set
-                $prompt_to_use = $instructions;
-            }
+        $ai_prompt = Settings::linkGet('ai_prompt', '');
+        if ( !empty($ai_prompt) ) {
+            $prompt_to_use = $ai_prompt;
+            // Replace placeholder with actual instructions
+            // Use regex to find the placeholder in various HTML contexts and preserve formatting
+            // Match the placeholder text regardless of surrounding HTML tags
+            $placeholder_pattern = '/--\s*Instructions\s+Included\s+Here\s*--/i';
+            // Find all matches and replace, preserving the HTML structure around it
+            $prompt_to_use = preg_replace($placeholder_pattern, $instructions, $prompt_to_use);
         } else {
-            // Fallback to instructions if no link_id
+            // Fallback to instructions if no AI prompt is set
             $prompt_to_use = $instructions;
         }
         $api_info = getAIApiUrl();
