@@ -181,11 +181,24 @@
     <li><strong>Use actual student names:</strong> When checked, display real names. When unchecked, students see generated names (e.g., "Purple Elephant") and instructors see real names with generated names in parentheses (e.g., "John Doe (Purple Elephant)")</li>
     <li><strong>Allow students to see and comment on all submissions after the minimum has been met:</strong> When checked, students who have met the minimum comment requirement can see and comment on all submissions. When unchecked, they can only see submissions they have already commented on.</li>
     <li><strong>Allow students to reset and resubmit their papers:</strong> Enables the Reset Submission feature. When a student resets, their submission becomes editable again and comments are soft-deleted (hidden from students but visible to instructors).</li>
+    <li><strong>AI API URL:</strong> Optional endpoint URL for generating AI comments. Leave empty to use the built-in test endpoint. For OpenAI, use: <code>https://api.openai.com/v1/chat/completions</code></li>
+    <li><strong>AI API Key:</strong> Optional authentication key for the AI API. Required if using an external AI service like OpenAI.</li>
+    <li><strong>Auto Instructor Grade Timeout:</strong> Automatically award full instructor points if instructor has not graded within this time (in seconds) after submission. Typically left 0 or blank. Two days = 172800 seconds.</li>
     <li><strong>Due date:</strong> Optional due date for the assignment</li>
 </ul>
 
 <h4>Instructions / Rubric</h4>
 <p>Edit the assignment instructions and rubric that students will see. Use the rich text editor to format your content. This is displayed to students in the Instructions section.</p>
+
+<h4>AI Prompt</h4>
+<p>When AI is configured (AI API URL is set or using test endpoint), instructors can edit a custom AI prompt that controls how AI-generated comments are created. The AI Prompt editor appears as a separate tab in the instructor interface.</p>
+<ul>
+    <li><strong>Default prompt:</strong> If left empty, a default prompt is used that asks the AI to provide brief, actionable feedback focusing on strengths, areas for improvement, and specific suggestions.</li>
+    <li><strong>Placeholder support:</strong> Use <code>-- Instructions Included Here --</code> as a placeholder in your AI prompt. This will be automatically replaced with the actual assignment instructions when generating AI comments.</li>
+    <li><strong>Customization:</strong> Customize the AI prompt to match your pedagogical goals, tone, or specific feedback requirements. The prompt is sent to the AI service along with the student's paper text.</li>
+    <li><strong>AI comments:</strong> AI-generated comments appear in the comment stream alongside instructor and peer comments, marked as "AI" comments.</li>
+</ul>
+<p><strong>Note:</strong> The AI Prompt tab only appears when AI is configured. If no AI API URL is set and you're not using the test endpoint (key '12345'), the AI Prompt tab will not be visible.</p>
 
 <h4>Student Workflow</h4>
 <p>Students can:</p>
@@ -194,10 +207,11 @@
     <li>Save drafts without submitting</li>
     <li>Submit their paper (which locks it from editing unless reset is enabled)</li>
     <li>View their submitted paper and AI-enhanced version (if available)</li>
-    <li>See comments from instructors, other students, and AI</li>
+    <li>See comments from instructors, other students, and AI (if AI is configured)</li>
     <li>Review other students' submissions and add comments</li>
     <li>View their points and review count on the main page</li>
 </ul>
+<p><strong>AI Comments:</strong> When AI is configured and a student submits their paper, an AI-generated comment is automatically created based on the AI prompt and assignment instructions. This comment appears immediately after submission and provides automated feedback to help students improve their work.</p>
 
 <h4>Peer Review System</h4>
 <p>The review system prioritizes submissions to help students meet the minimum comment requirement:</p>
@@ -223,8 +237,10 @@
     <li>A student views their main page (if overall_points > 0)</li>
     <li>A student submits a comment</li>
     <li>An instructor assigns or updates instructor points</li>
+    <li>The auto instructor grade timeout expires (if configured)</li>
 </ul>
 <p>Grades will only be sent if overall_points > 0.</p>
+<p><strong>Auto Instructor Grade Timeout:</strong> If this setting is configured (non-zero), students who have submitted their papers will automatically receive full instructor points if the instructor has not manually graded them within the specified timeout period. This ensures timely grade reporting even if instructors are unable to manually grade every submission.</p>
 
 <h4>Instructor Features</h4>
 <ul>

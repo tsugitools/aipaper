@@ -3,6 +3,7 @@
  * Utility functions for AI comment generation
  */
 
+ use \Tsugi\Util\U;
 use \Tsugi\Core\Settings;
 
 /**
@@ -17,12 +18,9 @@ function getAIApiUrl() {
     
     // Auto-use test endpoint if key is '12345' and no API URL is configured
     if ( empty($ai_api_url) && $key === '12345' ) {
-        // Construct URL using current script's directory (no hardcoded paths)
-        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
-        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        // Get directory of current script - use SCRIPT_NAME to get the path
-        $script_dir = dirname($_SERVER['SCRIPT_NAME']);
-        $ai_api_url = $protocol . $host . $script_dir . '/ai-test.php';
+        $path = U::rest_path();
+        error_log("PATH: ".print_r($path, true));
+        $ai_api_url = $path->base_url . $path->parent . '/ai-test.php';
     }
     
     $configured = !empty($ai_api_url) || $key === '12345';

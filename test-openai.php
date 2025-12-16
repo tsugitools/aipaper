@@ -14,8 +14,7 @@ $openai_key = getenv('OPENAI_API_KEY') ?: '';  // Reads from OPENAI_API_KEY env 
 $instructions = "Write a 500-word essay about the importance of education.";
 $paper_text = "Education is very important. It helps people learn new things and get better jobs. Without education, people would not know how to read or write. Education makes society better.";
 
-echo "Testing OpenAI API Connection\n";
-echo "=============================\n\n";
+echo "Testing OpenAI API Connection\n\n";
 echo "Endpoint: {$openai_endpoint}\n";
 echo "API Key: " . (empty($openai_key) ? '(not set)' : substr($openai_key, 0, 10) . '...') . "\n\n";
 
@@ -94,7 +93,6 @@ if ( isset($response_data['choices']) && is_array($response_data['choices']) && 
     $comment = $response_data['choices'][0]['message']['content'] ?? '';
     if ( !empty($comment) ) {
         echo "SUCCESS! AI Comment Generated:\n";
-        echo "==============================\n";
         echo $comment . "\n";
         echo "\nComment length: " . strlen($comment) . " characters\n";
     } else {

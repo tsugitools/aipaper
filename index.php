@@ -1080,8 +1080,6 @@ $OUTPUT->footerStart();
 <script src="https://cdn.jsdelivr.net/gh/jitbit/HtmlSanitizer@master/HtmlSanitizer.js"></script>
 <script src="https://cdn.ckeditor.com/ckeditor5/16.0.0/classic/ckeditor.js"></script>
 <script type="text/javascript">
-console.log('Script block loaded');
-console.log('jQuery available:', typeof jQuery !== 'undefined', typeof $ !== 'undefined');
 
 ClassicEditor.defaultConfig = {
     toolbar: {
@@ -1117,10 +1115,6 @@ function showSpinnerOverlay() {
     }, 1000);
 }
 
-// Test if script is running at all
-console.log('=== SCRIPT STARTING ===');
-console.log('jQuery available:', typeof jQuery !== 'undefined', typeof $ !== 'undefined');
-
 if (typeof jQuery === 'undefined' && typeof $ === 'undefined') {
     console.error('ERROR: jQuery is not loaded!');
     // Try loading jQuery
@@ -1128,18 +1122,15 @@ if (typeof jQuery === 'undefined' && typeof $ === 'undefined') {
     script.src = 'https://code.jquery.com/jquery-3.6.0.min.js';
     document.head.appendChild(script);
     script.onload = function() {
-        console.log('jQuery loaded, retrying...');
         initializeNavigation();
     };
 } else {
     $(document).ready( function () {
-        console.log('Document ready - setting up navigation handlers');
         initializeNavigation();
     });
 }
 
 function initializeNavigation() {
-    console.log('=== INITIALIZING NAVIGATION ===');
     // Log AI error to console if present
     <?php if ( isset($_SESSION['ai_error_console']) ) { 
         $error_data = json_decode($_SESSION['ai_error_console'], true);
@@ -1255,22 +1246,10 @@ function initializeNavigation() {
     
     // Handle Tsugi menu navigation clicks (use event delegation in case menu is rendered dynamically)
     // This runs for both instructors and students
-    console.log('Setting up click handler for .tsugi-nav-link');
-    
-    // Wait a moment for menu to render, then check links
-    setTimeout(function() {
-        console.log('Found links:', $('.tsugi-nav-link').length);
-        $('.tsugi-nav-link').each(function() {
-            console.log('Link:', $(this).text(), 'data-section:', $(this).data('section'), 'href:', $(this).attr('href'));
-        });
-    }, 1000);
-    
     $(document).on('click', '.tsugi-nav-link', function(e) {
-            console.log('CLICK DETECTED on .tsugi-nav-link');
             e.preventDefault();
             e.stopPropagation();
             var section = $(this).data('section');
-            console.log('Tab clicked:', section, 'Link:', $(this).attr('href'), 'Text:', $(this).text());
             
             if ( !section ) {
                 console.error('No section data found on clicked link');
@@ -1284,7 +1263,6 @@ function initializeNavigation() {
             // Add active class to clicked link and corresponding section
             $(this).addClass('active');
             var targetSection = $('#section-' + section);
-            console.log('Target section found:', targetSection.length, 'ID:', targetSection.attr('id'));
             
             if ( targetSection.length === 0 ) {
                 console.error('Section not found: #section-' + section);
@@ -1292,38 +1270,26 @@ function initializeNavigation() {
             }
             
             targetSection.addClass('active');
-            console.log('Section should now be visible:', targetSection.hasClass('active'), targetSection.css('display'));
             
             // Initialize AI Prompt editor if switching to that tab and it's not initialized
             <?php if ( $USER->instructor ) { ?>
                 if ( section === 'ai_prompt' ) {
-                    console.log('Switching to AI Prompt tab, editor initialized:', !!editors['ai_prompt']);
                     if ( !editors['ai_prompt'] ) {
                         // Wait for the section to be visible before initializing CKEditor
                         setTimeout(function() {
                             var aiPromptElement = document.querySelector( '#editor_ai_prompt' );
                             var sectionElement = document.querySelector( '#section-ai_prompt' );
-                            console.log('Initializing AI Prompt editor:', {
-                                element: !!aiPromptElement,
-                                section: !!sectionElement,
-                                active: sectionElement ? sectionElement.classList.contains('active') : false
-                            });
                             if ( aiPromptElement && sectionElement && sectionElement.classList.contains('active') ) {
                                 ClassicEditor
                                     .create( aiPromptElement, ClassicEditor.defaultConfig )
                                     .then(editor => {
                                         editors['ai_prompt'] = editor;
-                                        console.log( 'AI Prompt editor initialized successfully' );
                                     })
                                     .catch( error => {
                                         console.error( 'AI Prompt editor initialization error:', error );
                                     });
                             } else {
-                                console.error( 'AI Prompt editor element not found or section not active', {
-                                    element: !!aiPromptElement,
-                                    section: !!sectionElement,
-                                    active: sectionElement ? sectionElement.classList.contains('active') : false
-                                });
+                                console.error( 'AI Prompt editor element not found or section not active' );
                             }
                         }, 150);
                     }
