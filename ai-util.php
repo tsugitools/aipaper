@@ -19,7 +19,6 @@ function getAIApiUrl() {
     // Auto-use test endpoint if key is '12345' and no API URL is configured
     if ( empty($ai_api_url) && $key === '12345' ) {
         $path = U::rest_path();
-        error_log("PATH: ".print_r($path, true));
         $ai_api_url = $path->base_url . $path->parent . '/ai-test.php';
     }
     
