@@ -152,7 +152,6 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
 ## Not Yet Implemented
 
 The following features from the original design are not yet implemented:
-- Like capability for comments (database table exists but not used)
 - AI API integration (automatic AI comment generation on submission)
 - Auto-grading after maximum duration (time-based auto-grade feature)
 - Tabbed dialog interface (currently uses menu-based navigation)

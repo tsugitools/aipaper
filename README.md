@@ -12,7 +12,6 @@ This tool is designed to collect and grade short papers that were written with t
 
 - **Comment Streams**: Feedback is provided through comment streams with:
   - Filtering options (all comments, student comments, instructor comments, AI comments)
-  - Like capability for comments
   - Flag capability for submissions and comments
   - Support for student, instructor, and AI-generated comments
 

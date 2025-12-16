@@ -9,7 +9,6 @@ if ( !isset($PDOX) ) {
 
 // Dropping tables
 $DATABASE_UNINSTALL = array(
-"drop table if exists {$CFG->dbprefix}aipaper_like",
 "drop table if exists {$CFG->dbprefix}aipaper_comment",
 "drop table if exists {$CFG->dbprefix}aipaper_result"
 );
@@ -76,29 +75,6 @@ array( "{$CFG->dbprefix}aipaper_comment",
     INDEX idx_result_id (result_id),
     INDEX idx_user_id (user_id),
     INDEX idx_deleted (deleted)
-) ENGINE = InnoDB DEFAULT CHARSET=utf8"),
-
-array( "{$CFG->dbprefix}aipaper_like",
-"create table {$CFG->dbprefix}aipaper_like (
-    like_id      INTEGER NOT NULL KEY AUTO_INCREMENT,
-    comment_id   INTEGER NOT NULL,
-    user_id      INTEGER NOT NULL,
-
-    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT `{$CFG->dbprefix}aipaper_like_ibfk_1`
-        FOREIGN KEY (`comment_id`)
-        REFERENCES `{$CFG->dbprefix}aipaper_comment` (`comment_id`)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-
-    CONSTRAINT `{$CFG->dbprefix}aipaper_like_ibfk_2`
-        FOREIGN KEY (`user_id`)
-        REFERENCES `{$CFG->dbprefix}lti_user` (`user_id`)
-        ON DELETE CASCADE ON UPDATE CASCADE,
-
-    UNIQUE(comment_id, user_id),
-    INDEX idx_comment_id (comment_id),
-    INDEX idx_user_id (user_id)
 ) ENGINE = InnoDB DEFAULT CHARSET=utf8")
 
 );
