@@ -150,13 +150,10 @@ The tool uses a menu-based navigation system (not tabbed dialogs) with the follo
 
 **Note**: Overall points = instructor_points + submit_points + (comment_points × min_comments). Grades will only be sent for this activity if overall_points > 0.
 
-
 ## Technical Details
 
 - Uses CKEditor 5.0 for rich text editing
 - Uses HtmlSanitizer.js for safe HTML display
-- Point calculations centralized in `points-util.php`
-- LTI grade sending handled automatically via `sendGradeToLTI()` function
 - Supports basic launch analytics like other Tsugi tools
 
 
