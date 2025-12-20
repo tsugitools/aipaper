@@ -1077,6 +1077,12 @@ if ( U::strlen($inst_note) > 0 ) {
                 </p>
             <?php } ?>
         </div>
+        <?php if ( $min_comments > 0 ) { ?>
+            <div class="alert alert-warning" style="margin-bottom: 20px; border-left: 4px solid #f0ad4e;">
+                <h4 style="margin-top: 0;">📝 Peer Review Required</h4>
+                <p style="margin-bottom: 0;"><strong>After you submit your paper, you'll need to complete <?= $min_comments ?> peer review<?= $min_comments == 1 ? '' : 's' ?>.</strong> This is part of the assignment. The "Peer Review" tab will become available after submission.</p>
+            </div>
+        <?php } ?>
     <?php } ?>
     <div class="student-section <?= $is_submitted ? 'active' : '' ?>" id="section-main">
         <?php if ( $dueDate->message ) { ?>
@@ -1215,6 +1221,13 @@ if ( U::strlen($inst_note) > 0 ) {
             <div class="ckeditor-container">
                 <div id="display_instructions"><?= htmlentities($instructions ?? 'Instructions not yet available') ?></div>
             </div>
+            <?php if ( $min_comments > 0 && !$is_submitted ) { ?>
+                <div class="alert alert-warning" style="margin-top: 20px; border-left: 4px solid #f0ad4e;">
+                    <h4 style="margin-top: 0;">📝 Important: Peer Review Required</h4>
+                    <p style="margin-bottom: 8px;"><strong>After you submit your paper, you'll need to complete <?= $min_comments ?> peer review<?= $min_comments == 1 ? '' : 's' ?>.</strong></p>
+                    <p style="margin-bottom: 0;">Peer review is part of this assignment. Once you submit your paper, the "Peer Review" tab will become available in the menu, where you can review and comment on other students' submissions.</p>
+                </div>
+            <?php } ?>
         <?php } else { ?>
             <div class="alert alert-info">Instructions not yet available</div>
         <?php } ?>
@@ -1228,7 +1241,7 @@ if ( U::strlen($inst_note) > 0 ) {
         </div>
         <?php if ( $min_comments > 0 ) { ?>
             <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
-                <em>Note: After you submit your paper, you'll be able to review other students' submissions. This is part of the assignment.</em>
+                <em>Note: After you submit your paper, you'll be able to review other students' submissions. This is part of the assignment.  Sometimes if you are one of the first submitters, you may need to wait some time for other students to submit their papers before you can review them.</em>
             </p>
         <?php } ?>
         <?php if ( !$can_edit ) { ?>
@@ -1266,7 +1279,7 @@ if ( U::strlen($inst_note) > 0 ) {
     <div class="student-section" id="section-review">
         <h4 style="margin-top: 0;">Peer Review</h4>
         <div class="alert alert-info" style="margin-bottom: 20px;">
-            <p><strong>Review and comment on other students' submissions.</strong> This is part of the assignment.</p>
+            <p><strong>Review and comment on other students' submissions.</strong> This is part of the assignment.  Sometimes if you are one of the first submitters, you may need to wait some time for other students to submit their papers before you can review them.</p>
             <p style="margin-bottom: 0;"><strong>Your progress:</strong> 
             <?php if ( $min_comments == 0 ) { ?>
                 <?= $reviewed_count ?> review<?= $reviewed_count == 1 ? '' : 's' ?> completed
