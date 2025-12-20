@@ -330,6 +330,48 @@ if ( $is_submitted ) {
 // Load instructions from settings
 $instructions = Settings::linkGet('instructions', '');
 
+// Load current settings values for instructor (to check if defaults needed)
+$current_submitpoints = Settings::linkGet('submitpoints', '');
+$current_instructorpoints = Settings::linkGet('instructorpoints', '');
+$current_commentpoints = Settings::linkGet('commentpoints', '');
+$current_mincomments = Settings::linkGet('mincomments', '');
+$current_userealnames = Settings::linkGet('userealnames', false);
+$current_allowall = Settings::linkGet('allowall', false);
+$current_resubmit = Settings::linkGet('resubmit', false);
+$current_ai_api_url = Settings::linkGet('ai_api_url', '');
+$current_ai_api_key = Settings::linkGet('ai_api_key', '');
+$current_auto_timeout = Settings::linkGet('auto_instructor_grade_timeout', '');
+// Convert seconds to days and hours for display
+$auto_timeout_days = 0;
+$auto_timeout_hours = 0;
+if ( !empty($current_auto_timeout) && is_numeric($current_auto_timeout) ) {
+    $total_seconds = intval($current_auto_timeout);
+    $auto_timeout_days = floor($total_seconds / 86400); // 86400 seconds per day
+    $auto_timeout_hours = floor(($total_seconds % 86400) / 3600); // 3600 seconds per hour
+}
+
+// Determine if settings need defaults (all point values empty)
+$needs_defaults = empty($current_submitpoints) && empty($current_instructorpoints) && 
+                 empty($current_commentpoints) && empty($current_mincomments);
+
+// Determine if instructions will be truncated in preview (for students)
+$instructions_will_be_truncated = false;
+if ( !$USER->instructor && is_string($instructions) && U::strlen($instructions) > 0 ) {
+    $instructions_plain = strip_tags($instructions);
+    // Check if likely to be truncated: > 300 chars OR has multiple paragraphs
+    if ( strlen($instructions_plain) > 300 ) {
+        $instructions_will_be_truncated = true;
+    } else {
+        // Check for multiple paragraphs in HTML
+        if ( preg_match('/<p[^>]*>.*?<\/p>/s', $instructions) ) {
+            preg_match_all('/<p[^>]*>.*?<\/p>/s', $instructions, $matches);
+            if ( count($matches[0]) > 1 ) {
+                $instructions_will_be_truncated = true;
+            }
+        }
+    }
+}
+
 // Load AI prompt from settings (per link)
 $ai_prompt = Settings::linkGet('ai_prompt', '');
 
@@ -491,7 +533,7 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         return;
     }
     
-    // For instructors, save instructions and AI prompt
+    // For instructors, save instructions, AI prompt, and all settings
     if ( $USER->instructor ) {
         $instructions = U::get($_POST, 'instructions', '');
         Settings::linkSet('instructions', $instructions);
@@ -504,6 +546,26 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
             $ai_prompt = "<p>You are reviewing a student's paper submission.</p>\n\n<p>Provide a brief paragraph (approximately 200 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>\n\n<p>The following are the instructions for the assignment:</p>\n\n<p>-- Instructions Included Here --</p>\n\n";
         }
         Settings::linkSet('ai_prompt', $ai_prompt);
+        
+        // Save all settings fields
+        Settings::linkSet('submitpoints', U::get($_POST, 'submitpoints', ''));
+        Settings::linkSet('instructorpoints', U::get($_POST, 'instructorpoints', ''));
+        Settings::linkSet('commentpoints', U::get($_POST, 'commentpoints', ''));
+        Settings::linkSet('mincomments', U::get($_POST, 'mincomments', ''));
+        Settings::linkSet('userealnames', U::get($_POST, 'userealnames', false) ? true : false);
+        Settings::linkSet('allowall', U::get($_POST, 'allowall', false) ? true : false);
+        Settings::linkSet('resubmit', U::get($_POST, 'resubmit', false) ? true : false);
+        Settings::linkSet('ai_api_url', U::get($_POST, 'ai_api_url', ''));
+        Settings::linkSet('ai_api_key', U::get($_POST, 'ai_api_key', ''));
+        Settings::linkSet('auto_instructor_grade_timeout', U::get($_POST, 'auto_instructor_grade_timeout', ''));
+        
+        // Save due date
+        $due_date = U::get($_POST, 'due_date', '');
+        if ( !empty($due_date) ) {
+            Settings::linkSet('due_date', $due_date);
+        } else {
+            Settings::linkSet('due_date', '');
+        }
     }
 
     // Check if was already submitted (MySQL returns 0/1, not boolean)
@@ -618,6 +680,7 @@ $menu = new \Tsugi\UI\MenuSet();
 
 if ( $LAUNCH->user->instructor ) {
     $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
+    $menu->addLeft(__('Settings'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="settings" style="cursor: pointer;"');
     // Only show AI Prompt if AI is configured
     if ( isAIConfigured() ) {
         $menu->addLeft(__('AI Prompt'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_prompt" style="cursor: pointer;"');
@@ -627,7 +690,6 @@ if ( $LAUNCH->user->instructor ) {
     if ( $CFG->launchactivity ) {
         $submenu->addLink(__('Analytics'), 'analytics');
     }
-    $submenu->addLink(__('Settings'), '#', /* push */ false, SettingsForm::attr());
     // Only show test data generator if key is '12345'
     $key = $LAUNCH->key->key ?? '';
     if ( $key === '12345' ) {
@@ -639,10 +701,17 @@ if ( $LAUNCH->user->instructor ) {
 } else {
     // Add navigation items to menu
     if ( !$is_submitted ) {
-        // When not submitted: Paper, Paper+AI, Instructions on left; Save Draft, Submit Paper on right
+        // When not submitted: Paper, Paper+AI, Instructions (if truncated) on left; Save Draft, Submit Paper on right
         $menu->addLeft(__('Paper'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="submission" style="cursor: pointer;"');
         $menu->addLeft(__('Paper+AI'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_enhanced" style="cursor: pointer;"');
-        $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
+        // Only show Instructions tab if instructions will be truncated
+        if ( $instructions_will_be_truncated ) {
+            $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
+        }
+        // Show Peer Review menu item (disabled) if peer reviews are required
+        if ( $min_comments > 0 ) {
+            $menu->addLeft(__('Peer Review'), '#', /* push */ false, 'class="tsugi-nav-link" style="cursor: not-allowed; color: #999; opacity: 0.6;" title="Available after you submit your paper"');
+        }
         // Add Save and Submit buttons to menu if student can edit
         if ( $can_edit ) {
             $menu->addRight(__('Save Draft'), '#', /* push */ false, 'id="menu-save-btn" style="cursor: pointer;"');
@@ -650,10 +719,13 @@ if ( $LAUNCH->user->instructor ) {
             $menu->addRight($submit_text, '#', /* push */ false, 'id="menu-submit-btn" style="cursor: pointer; font-weight: bold;"');
         }
     } else {
-        // When submitted: Main, Instructions, Review on left
+        // When submitted: Main, Instructions (if truncated), Peer Review on left
         $menu->addLeft(__('Main'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="main" style="cursor: pointer;"');
-        $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
-        $menu->addLeft(__('Review'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="review" style="cursor: pointer;"');
+        // Only show Instructions tab if instructions were truncated
+        if ( $instructions_will_be_truncated ) {
+            $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
+        }
+        $menu->addLeft(__('Peer Review'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="review" style="cursor: pointer;" title="Review and comment on other students\' submissions"');
     }
     
     if ( U::strlen($inst_note) > 0 ) $menu->addRight(__('Note'), '#', /* push */ false, 'data-toggle="modal" data-target="#noteModal"');
@@ -669,23 +741,8 @@ $OUTPUT->bodyStart();
 $OUTPUT->topNav($menu);
 $OUTPUT->flashMessages();
 
-if ( $USER->instructor ) {
-    SettingsForm::start();
-    SettingsForm::text('submitpoints', __('Submit points (can be zero) - points earned for submitting a paper'));
-    SettingsForm::text('mincomments', __('Minimum number of comments each student must make (if zero, students can comment on any other student\'s submission)'));
-    SettingsForm::text('commentpoints', __('Points earned for each comment (can be zero)'));
-    SettingsForm::text('instructorpoints', __('Instructor grade points (can be zero)'));
-    SettingsForm::note(__('overall_points = instructor_points + submit_points + (comment_points * min_comments). Grades will only be sent for this activity if overall_points > 0.'));
-    SettingsForm::text('ai_api_url', __('AI API URL (optional) - endpoint for generating AI comments. Leave empty to use test endpoint.'));
-    SettingsForm::text('ai_api_key', __('AI API Key (optional) - authentication key for AI API'));
-    SettingsForm::checkbox('userealnames', __('Use actual student names instead of generated names'));
-    SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
-    SettingsForm::checkbox('resubmit', __('Allow students to reset and resubmit their papers'));
-    SettingsForm::text('auto_instructor_grade_timeout', __('Auto Grade Timeout (seconds) - automatically send a grade of 1.0 (100%) after this time has elapsed since submission if overall_points > 0. This ensures students get full credit even if they cannot complete enough reviews due to insufficient submissions. Typically left 0 or blank. Two days is 172800 seconds.'));
-    SettingsForm::dueDate();
-    SettingsForm::done();
-    SettingsForm::end();
-} else {
+// Student settings form (keep as modal)
+if ( !$USER->instructor ) {
     SettingsForm::start();
     SettingsForm::checkbox('allowall', __('Allow students to see and comment on all submissions after the minimum has been met'));
     SettingsForm::dueDate();
@@ -735,17 +792,250 @@ if ( U::strlen($inst_note) > 0 ) {
     <?php } ?>
     
     <form method="post" id="instructor_form">
+        <!-- Progress indicator -->
+        <div style="margin-bottom: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 4px;">
+            <strong>Setup Progress:</strong> 
+            <span style="color: #5cb85c;">Step 1: Instructions</span> → 
+            <span style="color: <?= $needs_defaults ? '#f0ad4e' : '#5cb85c' ?>;">Step 2: Settings</span>
+        </div>
+        
         <!-- Instructions section -->
         <div class="student-section active" id="section-instructions">
-            <p>Please enter the instructions for the assignment here.  This will be used to generate feedback for the students.</p>
+            <h3 style="margin-top: 0;">Step 1: Assignment Instructions</h3>
+            <p>Please enter the instructions for the assignment here. This will be used to generate feedback for the students.</p>
             <div class="ckeditor-container">
                 <textarea name="instructions" id="editor_instructions"><?= htmlentities($instructions ?? '') ?></textarea>
+            </div>
+        </div>
+        
+        <!-- Settings section -->
+        <div class="student-section" id="section-settings" style="margin-top: 30px;">
+            <h3 style="margin-top: 0;">Step 2: Assignment Settings</h3>
+            <p>Configure how points are awarded and other assignment options. You can use the preset options below or customize manually.</p>
+            
+            <!-- Assignment Type Preset Dropdown -->
+            <div style="margin-bottom: 25px; padding: 15px; background-color: #e8f4f8; border-radius: 4px;">
+                <label for="assignment_type_preset" style="font-weight: bold; display: block; margin-bottom: 8px;">
+                    Assignment Type (Optional - select to auto-fill recommended settings):
+                </label>
+                <select id="assignment_type_preset" style="width: 100%; max-width: 500px; padding: 8px;">
+                    <option value="">-- Select a preset (optional) --</option>
+                    <option value="peer_review">Peer Review Focused</option>
+                    <option value="instructor_graded">Instructor Graded</option>
+                    <option value="completion">Completion-Based</option>
+                    <option value="hybrid">Hybrid Peer Review + Instructor Grading</option>
+                    <option value="anonymous">Anonymous Peer Review</option>
+                    <option value="scaffolded">Scaffolded Peer Review</option>
+                </select>
+                <p style="margin-top: 8px; margin-bottom: 0; font-size: 0.9em; color: #666;">
+                    <em>Selecting a preset will populate the fields below with recommended values. You can still modify them before saving.</em>
+                </p>
+            </div>
+            
+            <!-- Points Settings -->
+            <div style="margin-bottom: 25px;">
+                <h4 style="border-bottom: 2px solid #ddd; padding-bottom: 8px;">Points Configuration</h4>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="submitpoints" style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        Submit Points
+                        <span class="info-icon" data-help="submitpoints" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <input type="number" name="submitpoints" id="submitpoints" 
+                           value="<?= htmlentities($current_submitpoints) ?>" 
+                           placeholder="<?= $needs_defaults ? '10' : '' ?>"
+                           min="0" step="1" 
+                           style="width: 100px; padding: 5px;">
+                    <span class="help-text" id="help-submitpoints" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        Points students earn for submitting their paper. Can be zero. Typical range: 10-20 points.
+                    </span>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="instructorpoints" style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        Instructor Grade Points
+                        <span class="info-icon" data-help="instructorpoints" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <input type="number" name="instructorpoints" id="instructorpoints" 
+                           value="<?= htmlentities($current_instructorpoints) ?>" 
+                           placeholder="<?= $needs_defaults ? '50' : '' ?>"
+                           min="0" step="1" 
+                           style="width: 100px; padding: 5px;">
+                    <span class="help-text" id="help-instructorpoints" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        Points you will award based on your evaluation. Can be zero. Typical range: 0-80 points depending on assignment type.
+                    </span>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="commentpoints" style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        Points per Comment
+                        <span class="info-icon" data-help="commentpoints" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <input type="number" name="commentpoints" id="commentpoints" 
+                           value="<?= htmlentities($current_commentpoints) ?>" 
+                           placeholder="<?= $needs_defaults ? '5' : '' ?>"
+                           min="0" step="1" 
+                           style="width: 100px; padding: 5px;">
+                    <span class="help-text" id="help-commentpoints" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        Points students earn for each peer review comment they make. Can be zero. If minimum comments is 0, this should also be 0. Typical range: 5-10 points.
+                    </span>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="mincomments" style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        Minimum Comments Required
+                        <span class="info-icon" data-help="mincomments" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <input type="number" name="mincomments" id="mincomments" 
+                           value="<?= htmlentities($current_mincomments) ?>" 
+                           placeholder="<?= $needs_defaults ? '3' : '' ?>"
+                           min="0" step="1" 
+                           style="width: 100px; padding: 5px;">
+                    <span class="help-text" id="help-mincomments" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        Required number of peer review comments each student must make. If zero, peer review is optional. Typical: 3-5 for classes of 20+, 2-3 for smaller classes.
+                    </span>
+                </div>
+                
+                <!-- Live Total Points Display -->
+                <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9; border: 2px solid #5cb85c; border-radius: 4px;">
+                    <strong>Total Points:</strong> 
+                    <span id="total-points-display" style="font-size: 1.2em; font-weight: bold; color: #5cb85c;">0</span>
+                    <div style="margin-top: 8px; font-size: 0.9em; color: #666;">
+                        Formula: <code>Total = Instructor Points + Submit Points + (Comment Points × Min Comments)</code>
+                    </div>
+                    <div id="points-warning" style="margin-top: 8px; color: #d9534f; font-weight: bold; display: none;">
+                        ⚠️ Warning: Total points is 0. Grades will not be sent to the LMS.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Other Settings -->
+            <div style="margin-bottom: 25px;">
+                <h4 style="border-bottom: 2px solid #ddd; padding-bottom: 8px;">Other Settings</h4>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        <input type="checkbox" name="userealnames" id="userealnames" value="1" 
+                               <?= $current_userealnames ? 'checked' : '' ?>>
+                        Use Actual Student Names
+                        <span class="info-icon" data-help="userealnames" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <span class="help-text" id="help-userealnames" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        When unchecked, students see generated names (e.g., "Purple Elephant") for anonymity. Instructors always see real names.
+                    </span>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        <input type="checkbox" name="allowall" id="allowall" value="1" 
+                               <?= $current_allowall ? 'checked' : '' ?>>
+                        Allow students to see all submissions after minimum is met
+                        <span class="info-icon" data-help="allowall" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <span class="help-text" id="help-allowall" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        When checked, students who meet the minimum comment requirement can see and comment on all submissions. When unchecked, they only see submissions they've already reviewed.
+                    </span>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        <input type="checkbox" name="resubmit" id="resubmit" value="1" 
+                               <?= $current_resubmit ? 'checked' : '' ?>>
+                        Allow Students to Reset and Resubmit
+                        <span class="info-icon" data-help="resubmit" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <span class="help-text" id="help-resubmit" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        When enabled, students can reset their submission to make it editable again. Comments are hidden but still count for points.
+                    </span>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        Auto Grade Timeout
+                        <span class="info-icon" data-help="auto_timeout" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <div style="display: inline-block;">
+                        <select id="auto_timeout_days" style="width: 100px; padding: 5px; margin-right: 5px;">
+                            <option value="0">0 days</option>
+                            <?php for ($i = 1; $i <= 30; $i++): ?>
+                                <option value="<?= $i ?>" <?= $auto_timeout_days == $i ? 'selected' : '' ?>><?= $i ?> day<?= $i == 1 ? '' : 's' ?></option>
+                            <?php endfor; ?>
+                        </select>
+                        <select id="auto_timeout_hours" style="width: 100px; padding: 5px;">
+                            <option value="0">0 hours</option>
+                            <?php for ($i = 1; $i <= 23; $i++): ?>
+                                <option value="<?= $i ?>" <?= $auto_timeout_hours == $i ? 'selected' : '' ?>><?= $i ?> hour<?= $i == 1 ? '' : 's' ?></option>
+                            <?php endfor; ?>
+                        </select>
+                        <input type="hidden" name="auto_instructor_grade_timeout" id="auto_instructor_grade_timeout" value="<?= htmlentities($current_auto_timeout) ?>">
+                        <span id="auto_timeout_display" style="margin-left: 10px; color: #666; font-size: 0.9em;"></span>
+                    </div>
+                    <span class="help-text" id="help-auto_timeout" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em; clear: both; display: block; margin-top: 5px;">
+                        Automatically send grade of 100% after this time since submission. Ensures students get credit even if they can't complete reviews. Typically left at 0 days and 0 hours.
+                    </span>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="ai_api_url" style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        AI API URL (optional)
+                        <span class="info-icon" data-help="ai_api_url" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <input type="text" name="ai_api_url" id="ai_api_url" 
+                           value="<?= htmlentities($current_ai_api_url) ?>" 
+                           placeholder="https://api.openai.com/v1/chat/completions"
+                           style="width: 400px; padding: 5px;">
+                    <span class="help-text" id="help-ai_api_url" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        Endpoint URL for generating AI comments. Leave empty to use test endpoint. For OpenAI, use: https://api.openai.com/v1/chat/completions
+                    </span>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="ai_api_key" style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        AI API Key (optional)
+                        <span class="info-icon" data-help="ai_api_key" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <input type="password" name="ai_api_key" id="ai_api_key" 
+                           value="<?= htmlentities($current_ai_api_key) ?>" 
+                           placeholder="Your API key"
+                           style="width: 300px; padding: 5px;">
+                    <span class="help-text" id="help-ai_api_key" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        Authentication key for the AI API. Required if using an external AI service like OpenAI.
+                    </span>
+                </div>
+                
+                <?php
+                // Due date handling - need to integrate SettingsForm::dueDate() functionality
+                $due_date = Settings::linkGet('due_date', '');
+                ?>
+                <div style="margin-bottom: 15px;">
+                    <label for="due_date" style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        Due Date (optional)
+                        <span class="info-icon" data-help="due_date" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <input type="datetime-local" name="due_date" id="due_date" 
+                           value="<?= $due_date ? date('Y-m-d\TH:i', strtotime($due_date)) : '' ?>" 
+                           style="padding: 5px;">
+                    <span class="help-text" id="help-due_date" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        Optional due date for the assignment. Students will see a warning if the due date has passed.
+                    </span>
+                </div>
+            </div>
+            
+            <!-- LMS Integration Info -->
+            <div style="margin-top: 25px; padding: 15px; background-color: #e8f4f8; border-left: 4px solid #337ab7; border-radius: 4px;">
+                <strong>About LMS Grade Integration:</strong>
+                <p style="margin-top: 8px; margin-bottom: 0; font-size: 0.9em;">
+                    The tool sends grades to your LMS as a percentage (0.0 to 1.0). For example, if a student earns 7 out of 20 points, 
+                    the tool sends 0.35 (35%) to the LMS. The LMS then scales this percentage based on the point value you set in the LMS assignment.
+                    If your LMS assignment is worth 100 points, 0.35 becomes 35 points in the LMS gradebook.
+                </p>
             </div>
         </div>
         
         <!-- AI Prompt section (only shown if AI is configured) -->
         <?php if ( isAIConfigured() ) { ?>
         <div class="student-section" id="section-ai_prompt">
+            <h3 style="margin-top: 0;">AI Prompt Configuration (Optional)</h3>
             <?php 
             // Get or create default AI prompt (use HTML formatting for CKEditor)
             if ( empty($ai_prompt) ) {
@@ -753,18 +1043,41 @@ if ( U::strlen($inst_note) > 0 ) {
                 $ai_prompt = "<p>You are reviewing a student's paper submission.</p>\n\n<p>Provide a brief paragraph (approximately 200 words or less) with specific, actionable feedback. Focus on:</p>\n<ul>\n<li>Strengths of the submission</li>\n<li>Areas for improvement</li>\n<li>Specific suggestions for revision</li>\n</ul>\n\n<p>Be encouraging but honest, and reference specific parts of the paper when possible.</p>\n\n<p>The following are the instructions for the assignment:</p>\n\n<p>-- Instructions Included Here --</p>\n\n";
             }
             ?>
-            <p><em>This prompt is sent to the AI service when generating feedback comments. Use <strong>-- Instructions Included Here --</strong> as a placeholder where you want the assignment instructions to be inserted automatically.</em></p>
+            <p><em>This prompt is sent to the AI service when generating feedback comments. The text shown below is the default prompt. Feel free to improve it. Use <strong>-- Instructions Included Here --</strong> as a placeholder where you want the assignment instructions to be inserted automatically.</em></p>
             <div class="ckeditor-container">
                 <textarea name="ai_prompt" id="editor_ai_prompt"><?= htmlentities($ai_prompt) ?></textarea>
             </div>
         </div>
         <?php } ?>
-        <!-- Hidden submit button for instructor form -->
+        
+        <!-- Save button in content area -->
+        <div id="instructor-save-section" style="margin-top: 30px; padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+            <button type="button" id="content-save-instructor-btn" class="btn btn-primary" style="font-weight: bold; padding: 10px 20px;">
+                <span id="save-button-text">Save All Settings</span>
+            </button>
+            <p id="save-button-help" style="margin-top: 10px; margin-bottom: 0; font-size: 0.9em; color: #666;">
+                <em>Saves both instructions and settings. Make sure to configure settings before students begin submitting.</em>
+            </p>
+        </div>
+        
+        <!-- Hidden submit button for form submission -->
         <input type="submit" name="save_instructions" id="hidden-save-instructor-btn" style="display: none;">
     </form>
 <?php } else { ?>
     <!-- Student: Sections with Tsugi menu navigation -->
     <form method="post" id="paper_form">
+    <!-- Show instructions prominently at top if not submitted -->
+    <?php if ( !$is_submitted && is_string($instructions) && U::strlen($instructions) > 0 ) { ?>
+        <div class="alert alert-success" style="margin-bottom: 20px; border-left: 4px solid #5cb85c;">
+            <h4 style="margin-top: 0;">Assignment Instructions</h4>
+            <div id="instructions-preview"><?= htmlentities($instructions) ?></div>
+            <?php if ( $instructions_will_be_truncated ) { ?>
+                <p style="margin-top: 10px; margin-bottom: 0;" id="instructions-view-full-link">
+                    <a href="#" class="tsugi-nav-link" data-section="instructions" style="font-weight: bold;">View full instructions →</a>
+                </p>
+            <?php } ?>
+        </div>
+    <?php } ?>
     <div class="student-section <?= $is_submitted ? 'active' : '' ?>" id="section-main">
         <?php if ( $dueDate->message ) { ?>
             <p style="color:red;"><?= htmlentities($dueDate->message) ?></p>
@@ -808,6 +1121,16 @@ if ( U::strlen($inst_note) > 0 ) {
                     <div id="ai-content-wrapper" style="display: none; margin-top: 10px;">
                         <div id="ai-content" class="ckeditor-display"></div>
                     </div>
+                </div>
+            <?php } ?>
+            
+            <?php if ( $min_comments > 0 && $reviewed_count < $min_comments ) { ?>
+                <div class="alert alert-warning" style="margin-top: 30px;">
+                    <h4 style="margin-top: 0;">Next Step: Complete Peer Reviews</h4>
+                    <p>You have completed <?= $reviewed_count ?> of <?= $min_comments ?> required peer review<?= $min_comments == 1 ? '' : 's' ?>.</p>
+                    <p style="margin-bottom: 0;">
+                        <a href="#" class="tsugi-nav-link btn btn-primary" data-section="review">Go to Peer Review →</a>
+                    </p>
                 </div>
             <?php } ?>
             
@@ -881,11 +1204,12 @@ if ( U::strlen($inst_note) > 0 ) {
             <?php } ?>
         <?php } else { ?>
             <div class="alert alert-info" style="margin-top: 20px;">
-                <strong>Status:</strong> Your paper has not been submitted yet. Use the Paper and AI Enhanced sections to write and submit your paper.
+                <strong>Status:</strong> Your paper has not been submitted yet. Use the <strong>Paper</strong> section to write your original work, and optionally use <strong>Paper+AI</strong> if you used AI to enhance your paper.
             </div>
         <?php } ?>
     </div>
     
+    <?php if ( $instructions_will_be_truncated ) { ?>
     <div class="student-section" id="section-instructions">
         <?php if ( is_string($instructions) && U::strlen($instructions) > 0 ) { ?>
             <div class="ckeditor-container">
@@ -895,16 +1219,18 @@ if ( U::strlen($inst_note) > 0 ) {
             <div class="alert alert-info">Instructions not yet available</div>
         <?php } ?>
     </div>
+    <?php } ?>
     
     <div class="student-section <?= !$is_submitted ? 'active' : '' ?>" id="section-submission">
-        <p>
-            Write your paper here. You can use AI to research and write your paper.  Do not use AI to write,
-            rewrite or enhance your paper in any way.
-            Spelling errors, grammar errors, and other minor mistakes are OK. This is your original work.
-            If you want to use AI to write, rewrite or enhance your paper in any way, please
-            include it under Paper+AI.  Reviewers and graders will look at both.
-            AI (if configured) will be used to generate feedback on the non-AI version of your paper.
-        </p>
+        <h4 style="margin-top: 0;">Paper (My Original Work)</h4>
+        <div class="alert alert-info" style="margin-bottom: 15px;">
+            <p><strong>Write your original paper here.</strong> You may use AI tools for research and brainstorming, but the content you submit should be your own original writing. Minor spelling and grammar errors are acceptable. If you used AI to generate, rewrite, or significantly enhance any portion of your paper, please include that AI-enhanced version in the <strong>Paper+AI</strong> section below.<?php if ( $min_comments > 0 ) { ?> <strong>After submitting:</strong> You'll need to complete <?= $min_comments ?> peer review<?= $min_comments == 1 ? '' : 's' ?>.<?php } ?></p>
+        </div>
+        <?php if ( $min_comments > 0 ) { ?>
+            <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+                <em>Note: After you submit your paper, you'll be able to review other students' submissions. This is part of the assignment.</em>
+            </p>
+        <?php } ?>
         <?php if ( !$can_edit ) { ?>
             <div class="alert alert-info">Your submission has been submitted and cannot be edited.</div>
             <div class="ckeditor-container">
@@ -918,8 +1244,11 @@ if ( U::strlen($inst_note) > 0 ) {
     </div>
     
     <div class="student-section" id="section-ai_enhanced">
-        <p>Optionally, you can use AI to enhance your paper and include the AI-improved version of your paper here.
-        If both are submitted reviewers and graders will look at both.</p>
+        <h4 style="margin-top: 0;">Paper+AI (Optional)</h4>
+        <div class="alert alert-warning" style="margin-bottom: 15px;">
+            <p><strong>If you used AI to generate, rewrite, or significantly enhance any portion of your paper,</strong> please include that AI-enhanced version here. This is optional—only include it if you used AI assistance beyond research and brainstorming.</p>
+            <p style="margin-bottom: 0;">Reviewers and graders will evaluate both versions. AI feedback (if configured) will be generated on your original paper above.</p>
+        </div>
         <?php if ( !$can_edit ) { ?>
             <div class="alert alert-info">Your AI enhanced submission cannot be edited.</div>
             <div class="ckeditor-container">
@@ -935,16 +1264,20 @@ if ( U::strlen($inst_note) > 0 ) {
     
     <?php if ( $is_submitted ) { ?>
     <div class="student-section" id="section-review">
-        <p><strong>Review count:</strong> 
-        <?php if ( $min_comments == 0 ) { ?>
-            <?= $reviewed_count ?>
-        <?php } else if ( $reviewed_count < $min_comments ) { ?>
-            <?= $reviewed_count ?>/<?= $min_comments ?>
-        <?php } else { ?>
-            <?= $reviewed_count ?>
-        <?php } ?>
-        </p>
-        <p>Review and comment on other students' submissions. Submissions are sorted by oldest first, prioritizing those that need more comments.</p>
+        <h4 style="margin-top: 0;">Peer Review</h4>
+        <div class="alert alert-info" style="margin-bottom: 20px;">
+            <p><strong>Review and comment on other students' submissions.</strong> This is part of the assignment.</p>
+            <p style="margin-bottom: 0;"><strong>Your progress:</strong> 
+            <?php if ( $min_comments == 0 ) { ?>
+                <?= $reviewed_count ?> review<?= $reviewed_count == 1 ? '' : 's' ?> completed
+            <?php } else if ( $reviewed_count < $min_comments ) { ?>
+                <?= $reviewed_count ?> of <?= $min_comments ?> required review<?= $min_comments == 1 ? '' : 's' ?> completed
+            <?php } else { ?>
+                ✓ <?= $reviewed_count ?> review<?= $reviewed_count == 1 ? '' : 's' ?> completed (minimum met)
+            <?php } ?>
+            </p>
+        </div>
+        <p>Submissions are sorted by oldest first, prioritizing those that need more comments.</p>
         
         <?php if ( count($review_submissions) > 0 ) { ?>
             <div class="review-list" style="margin-top: 20px;">
@@ -993,7 +1326,20 @@ if ( U::strlen($inst_note) > 0 ) {
     <?php } ?>
     
     <?php if ( $can_edit ) { ?>
-        <!-- Hidden submit buttons for menu triggers -->
+        <!-- Action buttons in content area -->
+        <div style="margin-top: 30px; padding: 20px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+            <p style="margin-bottom: 15px;"><strong>Save your work:</strong></p>
+            <button type="button" id="content-save-btn" class="btn btn-default" style="margin-right: 10px;">
+                Save Draft
+            </button>
+            <button type="button" id="content-submit-btn" class="btn btn-primary" style="font-weight: bold;">
+                Submit Paper
+            </button>
+            <p style="margin-top: 10px; margin-bottom: 0; font-size: 0.9em; color: #666;">
+                <em>Save Draft saves both your Paper and Paper+AI content. Once submitted, your paper will be locked unless your instructor allows resubmission.</em>
+            </p>
+        </div>
+        <!-- Hidden submit buttons for form submission -->
         <input type="submit" name="save_paper" id="hidden-save-btn" style="display: none;">
         <input type="submit" name="submit_paper" id="hidden-submit-btn" style="display: none;">
     <?php } ?>
@@ -1140,6 +1486,201 @@ function initializeNavigation() {
                 console.error( error );
             });
         // Instructor: AI Prompt editor - will be initialized lazily when tab is clicked
+        
+        // Assignment Type Presets
+        var assignmentPresets = {
+            'peer_review': {
+                submitpoints: 15,
+                instructorpoints: 0,
+                commentpoints: 8,
+                mincomments: 4,
+                userealnames: false,
+                allowall: true,
+                resubmit: false
+            },
+            'instructor_graded': {
+                submitpoints: 15,
+                instructorpoints: 70,
+                commentpoints: 0,
+                mincomments: 0,
+                userealnames: true,
+                allowall: true,
+                resubmit: false
+            },
+            'completion': {
+                submitpoints: 100,
+                instructorpoints: 0,
+                commentpoints: 0,
+                mincomments: 0,
+                userealnames: true,
+                allowall: true,
+                resubmit: true
+            },
+            'hybrid': {
+                submitpoints: 10,
+                instructorpoints: 50,
+                commentpoints: 5,
+                mincomments: 3,
+                userealnames: true,
+                allowall: true,
+                resubmit: false
+            },
+            'anonymous': {
+                submitpoints: 15,
+                instructorpoints: 20,
+                commentpoints: 8,
+                mincomments: 4,
+                userealnames: false,
+                allowall: true,
+                resubmit: false
+            },
+            'scaffolded': {
+                submitpoints: 20,
+                instructorpoints: 30,
+                commentpoints: 5,
+                mincomments: 2,
+                userealnames: true,
+                allowall: true,
+                resubmit: true
+            }
+        };
+        
+        $('#assignment_type_preset').on('change', function() {
+            var preset = $(this).val();
+            if ( preset && assignmentPresets[preset] ) {
+                var values = assignmentPresets[preset];
+                $('#submitpoints').val(values.submitpoints);
+                $('#instructorpoints').val(values.instructorpoints);
+                $('#commentpoints').val(values.commentpoints);
+                $('#mincomments').val(values.mincomments);
+                $('#userealnames').prop('checked', values.userealnames);
+                $('#allowall').prop('checked', values.allowall);
+                $('#resubmit').prop('checked', values.resubmit);
+                // Trigger calculation update
+                calculateTotalPoints();
+            }
+        });
+        
+        // Live Total Points Calculation
+        function calculateTotalPoints() {
+            var instructorPoints = parseInt($('#instructorpoints').val() || 0);
+            var submitPoints = parseInt($('#submitpoints').val() || 0);
+            var commentPoints = parseInt($('#commentpoints').val() || 0);
+            var minComments = parseInt($('#mincomments').val() || 0);
+            
+            var total = instructorPoints + submitPoints + (commentPoints * minComments);
+            $('#total-points-display').text(total);
+            
+            // Show warning if total is 0
+            if ( total === 0 ) {
+                $('#points-warning').show();
+            } else {
+                $('#points-warning').hide();
+            }
+        }
+        
+        // Attach calculation to point input fields
+        $('#submitpoints, #instructorpoints, #commentpoints, #mincomments').on('input change', function() {
+            calculateTotalPoints();
+        });
+        
+        // Initial calculation
+        calculateTotalPoints();
+        
+        // Auto Grade Timeout: Calculate seconds from days and hours
+        function calculateAutoTimeout() {
+            var days = parseInt($('#auto_timeout_days').val() || 0);
+            var hours = parseInt($('#auto_timeout_hours').val() || 0);
+            var totalSeconds = (days * 86400) + (hours * 3600);
+            
+            // Update hidden field
+            $('#auto_instructor_grade_timeout').val(totalSeconds);
+            
+            // Update display
+            if ( totalSeconds === 0 ) {
+                $('#auto_timeout_display').text('(No timeout)');
+            } else {
+                var displayText = '';
+                if ( days > 0 ) {
+                    displayText += days + ' day' + (days === 1 ? '' : 's');
+                }
+                if ( hours > 0 ) {
+                    if ( displayText ) displayText += ' and ';
+                    displayText += hours + ' hour' + (hours === 1 ? '' : 's');
+                }
+                $('#auto_timeout_display').text('(' + displayText + ' = ' + totalSeconds.toLocaleString() + ' seconds)');
+            }
+        }
+        
+        // Attach calculation to dropdowns
+        $('#auto_timeout_days, #auto_timeout_hours').on('change', function() {
+            calculateAutoTimeout();
+        });
+        
+        // Initial calculation
+        calculateAutoTimeout();
+        
+        // Info Icon Help Text Toggle
+        $('.info-icon').on('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var helpId = 'help-' + $(this).data('help');
+            var $helpText = $('#' + helpId);
+            if ( $helpText.length ) {
+                $helpText.toggle();
+            }
+        });
+        
+        // Content area Save button handler
+        $('#content-save-instructor-btn').on('click', function(e) {
+            e.preventDefault();
+            // Update editor content before submitting
+            if ( editors['instructions'] ) {
+                $('#editor_instructions').val(editors['instructions'].getData());
+            }
+            if ( editors['ai_prompt'] ) {
+                $('#editor_ai_prompt').val(editors['ai_prompt'].getData());
+            }
+            // Trigger the hidden submit button
+            $('#hidden-save-instructor-btn').click();
+        });
+        
+        // Keep menu Save button working for backward compatibility
+        $('#menu-save-instructor-btn').on('click', function(e) {
+            e.preventDefault();
+            $('#content-save-instructor-btn').click();
+        });
+        
+        // Update save button text based on active section
+        function updateSaveButtonText() {
+            var activeSection = $('.student-section.active').attr('id');
+            var buttonText = $('#save-button-text');
+            var helpText = $('#save-button-help');
+            
+            if ( activeSection === 'section-instructions' ) {
+                buttonText.text('Save Instructions');
+                helpText.html('<em>Saves the assignment instructions.</em>');
+            } else if ( activeSection === 'section-settings' ) {
+                buttonText.text('Save Settings');
+                helpText.html('<em>Saves all assignment settings including points, peer review requirements, and other options.</em>');
+            } else if ( activeSection === 'section-ai_prompt' ) {
+                buttonText.text('Save AI Prompt');
+                helpText.html('<em>Saves the AI prompt configuration.</em>');
+            } else {
+                buttonText.text('Save All Settings');
+                helpText.html('<em>Saves both instructions and settings. Make sure to configure settings before students begin submitting.</em>');
+            }
+        }
+        
+        // Update button text when section changes
+        $(document).on('click', '.tsugi-nav-link', function() {
+            setTimeout(function() {
+                updateSaveButtonText();
+            }, 100);
+        });
+        
+        // Initial button text update
+        updateSaveButtonText();
     <?php } else { ?>
         // Student: Submission and AI Enhanced editors (if editable)
         <?php if ( $can_edit ) { ?>
@@ -1219,6 +1760,58 @@ function initializeNavigation() {
         // Instructions display
         var instructionsHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($instructions ?? '') ?>);
         $('#display_instructions').html(instructionsHtml);
+        
+        // Instructions preview at top (if shown)
+        <?php if ( !$is_submitted && is_string($instructions) && U::strlen($instructions) > 0 ) { ?>
+            var instructionsPreviewHtml = HtmlSanitizer.SanitizeHtml(<?= json_encode($instructions ?? '') ?>);
+            var fullInstructionsHtml = instructionsPreviewHtml;
+            // Show first paragraph or truncate if very long
+            var previewText = instructionsPreviewHtml;
+            var wasTruncated = false;
+            
+            // If HTML, try to extract first paragraph
+            var tempDiv = $('<div>').html(previewText);
+            var allParagraphs = tempDiv.find('p');
+            
+            if ( allParagraphs.length > 0 ) {
+                // Get first paragraph
+                previewText = allParagraphs.first().html();
+                // Check if there are more paragraphs OR if first paragraph is very long
+                if ( allParagraphs.length > 1 ) {
+                    wasTruncated = true;
+                } else {
+                    // Check if the single paragraph is very long (plain text > 300 chars)
+                    var plainText = $('<div>').html(previewText).text();
+                    if ( plainText.length > 300 ) {
+                        previewText = plainText.substring(0, 300) + '...';
+                        wasTruncated = true;
+                    }
+                }
+            } else {
+                // No paragraph structure - strip HTML tags and check length
+                var plainText = $('<div>').html(previewText).text();
+                if ( plainText.length > 300 ) {
+                    previewText = plainText.substring(0, 300) + '...';
+                    wasTruncated = true;
+                } else {
+                    previewText = plainText;
+                }
+            }
+            
+            $('#instructions-preview').html(previewText);
+            
+            // Only show "View full instructions" link if content was actually truncated
+            // Compare the preview with the full instructions to be sure
+            var previewPlain = $('<div>').html(previewText).text().replace(/\s+/g, ' ').trim();
+            var fullPlain = $('<div>').html(fullInstructionsHtml).text().replace(/\s+/g, ' ').trim();
+            
+            if ( !wasTruncated || previewPlain === fullPlain || previewPlain.length >= fullPlain.length ) {
+                $('#instructions-view-full-link').hide();
+                // Also hide the Instructions menu item and section if no truncation occurred
+                $('.tsugi-nav-link[data-section="instructions"]').hide();
+                $('#section-instructions').hide();
+            }
+        <?php } ?>
     <?php } ?>
     
     // Handle Tsugi menu navigation clicks (use event delegation in case menu is rendered dynamically)
@@ -1296,8 +1889,14 @@ function initializeNavigation() {
             <?php } ?>
         <?php } ?>
         
-        // Handle menu Save button click (student)
+        // Handle menu Save button click (student) - keep for backward compatibility
         $('#menu-save-btn').on('click', function(e) {
+            e.preventDefault();
+            $('#content-save-btn').click();
+        });
+        
+        // Handle content area Save button click (student)
+        $('#content-save-btn').on('click', function(e) {
             e.preventDefault();
             <?php if ( $can_edit ) { ?>
                 // Update form fields with editor content before submitting
@@ -1312,24 +1911,15 @@ function initializeNavigation() {
             <?php } ?>
         });
         
-        // Handle instructor Save button click
-        $('#menu-save-instructor-btn').on('click', function(e) {
+        
+        // Handle menu Submit button click - keep for backward compatibility
+        $('#menu-submit-btn').on('click', function(e) {
             e.preventDefault();
-            <?php if ( $USER->instructor ) { ?>
-                // Update editor content before submitting
-                if ( editors['instructions'] ) {
-                    $('#editor_instructions').val(editors['instructions'].getData());
-                }
-                if ( editors['ai_prompt'] ) {
-                    $('#editor_ai_prompt').val(editors['ai_prompt'].getData());
-                }
-                // Trigger the hidden submit button
-                $('#hidden-save-instructor-btn').click();
-            <?php } ?>
+            $('#content-submit-btn').click();
         });
         
-        // Handle menu Submit button click
-        $('#menu-submit-btn').on('click', function(e) {
+        // Handle content area Submit button click
+        $('#content-submit-btn').on('click', function(e) {
             e.preventDefault();
             <?php if ( $can_edit ) { ?>
                 <?php if ( !$is_submitted ) { ?>
