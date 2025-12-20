@@ -73,96 +73,89 @@
         .container ul ul li {
             margin-bottom: 5px;
         }
+        .toc {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        .toc h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 20px;
+        }
+        .toc ul {
+            margin-bottom: 0;
+        }
+        .toc li {
+            margin-bottom: 8px;
+        }
+        .toc a {
+            color: #337ab7;
+            text-decoration: none;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        .quick-start {
+            background-color: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        .quick-start h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        h4[id], h5[id] {
+            scroll-margin-top: 80px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>AI MiniPaper Tool - Instructor Guide</h2>
         
-        <p>The AI MiniPaper Tool is designed to collect and grade short papers written with AI assistance. Students submit papers using CKEditor 5.0, with feedback provided through comment streams. The tool supports instructor grading, peer review comments, flagging for moderation, and comprehensive student analytics. This guide covers all the features and settings available to instructors.</p>
+        <p>The AI MiniPaper Tool is designed to collect and grade short papers written with AI assistance. Students submit papers using CKEditor 5.0, with feedback provided through comment streams. The tool supports instructor grading, peer review comments, flagging for moderation, and comprehensive student analytics.</p>
 
-<h4>Pedagogical Approaches and Settings Combinations</h4>
-<p>The AI MiniPaper Tool is flexible and can be configured to support various pedagogical approaches. Here are several common use cases and recommended settings:</p>
+        <!-- Quick Start Section -->
+        <div class="quick-start">
+            <h3>🚀 Quick Start</h3>
+            <p><strong>New to the tool? Follow these steps:</strong></p>
+            <ol>
+                <li><strong>Enter Instructions:</strong> Click the "Instructions" tab and write your assignment instructions</li>
+                <li><strong>Configure Settings:</strong> Click the "Settings" tab and either:
+                    <ul>
+                        <li>Select an <strong>Assignment Type</strong> preset from the dropdown (recommended for first-time users)</li>
+                        <li>Or manually configure points and options</li>
+                    </ul>
+                </li>
+                <li><strong>Save:</strong> Click "Save All Settings" to save your configuration</li>
+                <li><strong>Optional:</strong> Configure AI feedback in the "AI Prompt" tab if you want automated comments</li>
+            </ol>
+            <p><strong>Tip:</strong> Use the assignment type presets to get started quickly. You can always modify the values before saving.</p>
+        </div>
 
-<h5>1. Peer Review Focused Assignment</h5>
-<p><strong>Goal:</strong> Emphasize peer learning and feedback skills.</p>
-<ul>
-    <li><strong>Submit points:</strong> 10-20 points (encourages submission)</li>
-    <li><strong>Instructor grade points:</strong> 0 points (no instructor grading)</li>
-    <li><strong>Points per comment:</strong> 5-10 points</li>
-    <li><strong>Minimum comments:</strong> 3-5 comments required</li>
-    <li><strong>Use actual student names:</strong> Unchecked (anonymous peer review reduces bias)</li>
-    <li><strong>Allow all after minimum:</strong> Checked (encourages continued engagement)</li>
-    <li><strong>Allow reset:</strong> Optional (depends on whether you want students to revise)</li>
-</ul>
-<p><strong>Best for:</strong> Developing critical thinking, improving writing through peer feedback, large classes where individual instructor feedback is impractical.</p>
+        <!-- Table of Contents -->
+        <div class="toc">
+            <h3>📑 Table of Contents</h3>
+            <ul>
+                <li><a href="#settings">Settings Configuration</a></li>
+                <li><a href="#instructions">Instructions / Rubric</a></li>
+                <li><a href="#ai-prompt">AI Prompt Configuration</a></li>
+                <li><a href="#student-workflow">Student Workflow</a></li>
+                <li><a href="#peer-review">Peer Review System</a></li>
+                <li><a href="#grading">Grading and Points</a></li>
+                <li><a href="#instructor-features">Instructor Features</a></li>
+                <li><a href="#generated-names">Generated Name Search</a></li>
+                <li><a href="#test-data">Test Data</a></li>
+            </ul>
+        </div>
 
-<h5>2. Instructor Graded Assignment</h5>
-<p><strong>Goal:</strong> Traditional instructor evaluation with optional peer engagement.</p>
-<ul>
-    <li><strong>Submit points:</strong> 10-20 points</li>
-    <li><strong>Instructor grade points:</strong> 50-80 points (main grade component)</li>
-    <li><strong>Points per comment:</strong> 0 points (must be 0 when min_comments = 0)</li>
-    <li><strong>Minimum comments:</strong> 0 (peer review is optional, but won't count toward grade)</li>
-    <li><strong>Use actual student names:</strong> Checked (traditional approach)</li>
-    <li><strong>Allow all after minimum:</strong> Checked (if peer review is enabled)</li>
-    <li><strong>Allow reset:</strong> Unchecked (final submission)</li>
-</ul>
-<p><strong>Best for:</strong> High-stakes assignments, detailed instructor feedback needed, smaller classes.</p>
-<p><strong>Note:</strong> Since minimum comments is 0, points per comment must also be 0. Peer review can still be enabled for learning purposes, but comments won't contribute to the grade calculation.</p>
-
-<h5>3. Completion-Based Assignment</h5>
-<p><strong>Goal:</strong> Track completion and encourage reflection without heavy grading.</p>
-<ul>
-    <li><strong>Submit points:</strong> 50-100 points (full credit for submission)</li>
-    <li><strong>Instructor grade points:</strong> 0 points</li>
-    <li><strong>Points per comment:</strong> 0 points</li>
-    <li><strong>Minimum comments:</strong> 0</li>
-    <li><strong>Use actual student names:</strong> Checked</li>
-    <li><strong>Allow reset:</strong> Checked (allow revisions)</li>
-</ul>
-<p><strong>Best for:</strong> Low-stakes assignments, reflection exercises, participation tracking, formative assessment.</p>
-
-<h5>4. Hybrid Peer Review + Instructor Grading</h5>
-<p><strong>Goal:</strong> Combine peer learning with instructor evaluation.</p>
-<ul>
-    <li><strong>Submit points:</strong> 10 points</li>
-    <li><strong>Instructor grade points:</strong> 50 points (quality assessment)</li>
-    <li><strong>Points per comment:</strong> 5 points</li>
-    <li><strong>Minimum comments:</strong> 3 comments required</li>
-    <li><strong>Use actual student names:</strong> Checked (accountability in peer review)</li>
-    <li><strong>Allow all after minimum:</strong> Checked</li>
-    <li><strong>Allow reset:</strong> Unchecked (final submission)</li>
-</ul>
-<p><strong>Best for:</strong> Balanced assessment, developing both peer review skills and meeting quality standards, medium-sized classes.</p>
-
-<h5>5. Anonymous Peer Review</h5>
-<p><strong>Goal:</strong> Reduce bias and encourage honest feedback.</p>
-<ul>
-    <li><strong>Submit points:</strong> 10-20 points</li>
-    <li><strong>Instructor grade points:</strong> 0-30 points</li>
-    <li><strong>Points per comment:</strong> 5-10 points</li>
-    <li><strong>Minimum comments:</strong> 3-5 comments</li>
-    <li><strong>Use actual student names:</strong> <strong>Unchecked</strong> (key setting for anonymity)</li>
-    <li><strong>Allow all after minimum:</strong> Checked</li>
-    <li><strong>Allow reset:</strong> Optional</li>
-</ul>
-<p><strong>Best for:</strong> Reducing social pressure, encouraging honest critique, addressing bias concerns, sensitive topics.</p>
-
-<h5>6. Scaffolded Peer Review</h5>
-<p><strong>Goal:</strong> Gradually build peer review skills with structured requirements.</p>
-<ul>
-    <li><strong>Submit points:</strong> 20 points</li>
-    <li><strong>Instructor grade points:</strong> 30 points</li>
-    <li><strong>Points per comment:</strong> 5 points</li>
-    <li><strong>Minimum comments:</strong> Start with 2, increase to 4-5 in later assignments</li>
-    <li><strong>Use actual student names:</strong> Checked initially, then unchecked as students gain confidence</li>
-    <li><strong>Allow all after minimum:</strong> Checked</li>
-    <li><strong>Allow reset:</strong> Checked (encourages iterative improvement)</li>
-</ul>
-<p><strong>Best for:</strong> First-time peer reviewers, building review skills over time, courses with multiple assignments.</p>
-
-<h5>General Tips</h5>
+<h4 id="settings">Settings</h4>
+<p><strong>Tip:</strong> Use the "Assignment Type" dropdown in the Settings tab to quickly configure common assignment types. The tool provides presets for Peer Review Focused, Instructor Graded, Completion-Based, Hybrid, Anonymous, and Scaffolded assignments. You can select a preset and then modify the values as needed.</p>
+<p><strong>General Tips:</strong></p>
 <ul>
     <li><strong>Total points:</strong> Keep overall points reasonable (50-100 total is common). Remember: Overall points = instructor_points + submit_points + (comment_points × min_comments)</li>
     <li><strong>Minimum comments:</strong> Set based on class size. For classes of 20+, requiring 3-5 comments ensures everyone gets feedback. For smaller classes, 2-3 may suffice. <strong>Important:</strong> If minimum comments is 0, set points per comment to 0 as well, since comment points won't contribute to overall points when min_comments = 0.</li>
@@ -170,8 +163,6 @@
     <li><strong>Generated names:</strong> When enabled, instructors can still see real names (with generated names in parentheses), maintaining accountability while providing student privacy.</li>
     <li><strong>Reset feature:</strong> Enable reset if you want students to revise based on feedback. Disable for final submissions or when you want to preserve the original submission.</li>
 </ul>
-
-<h4>Settings</h4>
 <p>Configure the assignment settings including:</p>
 <ul>
     <li><strong>Submit points:</strong> Points students earn for submitting their paper (can be zero)</li>
@@ -183,24 +174,24 @@
     <li><strong>Allow students to reset and resubmit their papers:</strong> Enables the Reset Submission feature. When a student resets, their submission becomes editable again and comments are soft-deleted (hidden from students but visible to instructors).</li>
     <li><strong>AI API URL:</strong> Optional endpoint URL for generating AI comments. Leave empty to use the built-in test endpoint. For OpenAI, use: <code>https://api.openai.com/v1/chat/completions</code></li>
     <li><strong>AI API Key:</strong> Optional authentication key for the AI API. Required if using an external AI service like OpenAI.</li>
-    <li><strong>Auto Grade Timeout:</strong> Automatically send a grade of 1.0 (100%) after this time (in seconds) has elapsed since submission if overall_points > 0. This ensures students get full credit even if they cannot complete enough reviews due to insufficient submissions. Typically left 0 or blank. Two days = 172800 seconds.</li>
+    <li><strong>Auto Grade Timeout:</strong> Automatically send a grade of 1.0 (100%) after this time has elapsed since submission if overall_points > 0. This ensures students get full credit even if they cannot complete enough reviews due to insufficient submissions. Set using days and hours dropdowns (e.g., 2 days = 48 hours). Typically left at 0 days and 0 hours.</li>
     <li><strong>Due date:</strong> Optional due date for the assignment</li>
 </ul>
 
-<h4>Instructions / Rubric</h4>
+<h4 id="instructions">Instructions / Rubric</h4>
 <p>Edit the assignment instructions and rubric that students will see. Use the rich text editor to format your content. This is displayed to students in the Instructions section.</p>
 
-<h4>AI Prompt</h4>
+<h4 id="ai-prompt">AI Prompt</h4>
 <p>When AI is configured (AI API URL is set or using test endpoint), instructors can edit a custom AI prompt that controls how AI-generated comments are created. The AI Prompt editor appears as a separate tab in the instructor interface.</p>
 <ul>
-    <li><strong>Default prompt:</strong> If left empty, a default prompt is used that asks the AI to provide brief, actionable feedback focusing on strengths, areas for improvement, and specific suggestions.</li>
+    <li><strong>Default prompt:</strong> If left unchanged, a default prompt is used that asks the AI to provide brief, actionable feedback focusing on strengths, areas for improvement, and specific suggestions.</li>
     <li><strong>Placeholder support:</strong> Use <code>-- Instructions Included Here --</code> as a placeholder in your AI prompt. This will be automatically replaced with the actual assignment instructions when generating AI comments.</li>
     <li><strong>Customization:</strong> Customize the AI prompt to match your pedagogical goals, tone, or specific feedback requirements. The prompt is sent to the AI service along with the student's paper text.</li>
     <li><strong>AI comments:</strong> AI-generated comments appear in the comment stream alongside instructor and peer comments, marked as "AI" comments.</li>
 </ul>
 <p><strong>Note:</strong> The AI Prompt tab only appears when AI is configured. If no AI API URL is set and you're not using the test endpoint (key '12345'), the AI Prompt tab will not be visible.</p>
 
-<h4>Student Workflow</h4>
+<h4 id="student-workflow">Student Workflow</h4>
 <p>Students can:</p>
 <ul>
     <li>Write and edit their paper using CKEditor 5.0</li>
@@ -213,7 +204,7 @@
 </ul>
 <p><strong>AI Comments:</strong> When AI is configured and a student submits their paper, an AI-generated comment is automatically created based on the AI prompt and assignment instructions. This comment appears immediately after submission and provides automated feedback to help students improve their work.</p>
 
-<h4>Peer Review System</h4>
+<h4 id="peer-review">Peer Review System</h4>
 <p>The review system prioritizes submissions to help students meet the minimum comment requirement:</p>
 <ul>
     <li>Submissions the student has already commented on appear first</li>
@@ -223,7 +214,7 @@
     <li>Review list is paginated (10 submissions per page)</li>
 </ul>
 
-<h4>Grading</h4>
+<h4 id="grading">Grading</h4>
 <p><strong>Point Calculation:</strong></p>
 <p>Overall points = instructor_points + submit_points + (comment_points × min_comments)</p>
 <p>Earned points include:</p>
@@ -242,7 +233,7 @@
 <p>Grades will only be sent if overall_points > 0.</p>
 <p><strong>Auto Grade Timeout:</strong> If this setting is configured (non-zero) and overall_points > 0, students who have submitted their papers will automatically receive a grade of 1.0 (100%) after the specified timeout period has elapsed since submission. This ensures students get full credit even if they cannot complete enough peer reviews due to insufficient submissions available for review. The grade is sent directly to the LMS without modifying instructor points in the database, and applies regardless of whether the instructor has manually graded.</p>
 
-<h4>Instructor Features</h4>
+<h4 id="instructor-features">Instructor Features</h4>
 <ul>
     <li><strong>Student Data:</strong> View all student submissions, grades, and analytics from the Student Data menu with:
         <ul>
@@ -271,11 +262,11 @@
     <li><strong>Soft-Deleted Comments:</strong> When a submission is reset or a comment is hidden, comments are soft-deleted (visible to instructors with indication, hidden from students, still count for points)</li>
 </ul>
 
-<h4>Generated Name Search</h4>
+<h4 id="generated-names">Generated Name Search</h4>
 <p>When "Use actual student names" is unchecked, students see generated names (e.g., "Purple Elephant") instead of their real names. Instructors can search for students by their generated name using the "Search by Generated Name" field in the Student Data page. This is useful when you only know a student's generated name.</p>
 <p>Generated name search results appear in the main Student Data table with sorting disabled. The search is mutually exclusive with regular name/email search - entering one clears the other.</p>
 
-<h4>Test Data</h4>
+<h4 id="test-data">Test Data</h4>
 <p>If your LTI key is '12345', you can access a test data generator from the Instructor menu to create 100 dummy users with submitted papers for testing the review system.</p>
 
     </div>

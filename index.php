@@ -971,7 +971,7 @@ if ( U::strlen($inst_note) > 0 ) {
                         <span id="auto_timeout_display" style="margin-left: 10px; color: #666; font-size: 0.9em;"></span>
                     </div>
                     <span class="help-text" id="help-auto_timeout" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em; clear: both; display: block; margin-top: 5px;">
-                        Automatically send grade of 100% after this time since submission. Ensures students get credit even if they can't complete reviews. Typically left at 0 days and 0 hours.
+                        Automatically send grade of 100% after this time since submission. Ensures students get credit even if they can't complete reviews or if the instructor does not do their grading. Typically left at 0 days and 0 hours exept for courses with little regular instructor supervision.
                     </span>
                 </div>
                 
@@ -1487,22 +1487,22 @@ function initializeNavigation() {
             });
         // Instructor: AI Prompt editor - will be initialized lazily when tab is clicked
         
-        // Assignment Type Presets
+        // Assignment Type Presets (all total 100 points)
         var assignmentPresets = {
             'peer_review': {
-                submitpoints: 15,
+                submitpoints: 20,
                 instructorpoints: 0,
-                commentpoints: 8,
-                mincomments: 4,
+                commentpoints: 10,
+                mincomments: 8,  // 20 + 0 + (10 × 8) = 100
                 userealnames: false,
                 allowall: true,
                 resubmit: false
             },
             'instructor_graded': {
-                submitpoints: 15,
-                instructorpoints: 70,
+                submitpoints: 20,
+                instructorpoints: 80,
                 commentpoints: 0,
-                mincomments: 0,
+                mincomments: 0,  // 20 + 80 + 0 = 100
                 userealnames: true,
                 allowall: true,
                 resubmit: false
@@ -1511,7 +1511,7 @@ function initializeNavigation() {
                 submitpoints: 100,
                 instructorpoints: 0,
                 commentpoints: 0,
-                mincomments: 0,
+                mincomments: 0,  // 100 + 0 + 0 = 100
                 userealnames: true,
                 allowall: true,
                 resubmit: true
@@ -1519,17 +1519,17 @@ function initializeNavigation() {
             'hybrid': {
                 submitpoints: 10,
                 instructorpoints: 50,
-                commentpoints: 5,
-                mincomments: 3,
+                commentpoints: 10,
+                mincomments: 4,  // 10 + 50 + (10 × 4) = 100
                 userealnames: true,
                 allowall: true,
                 resubmit: false
             },
             'anonymous': {
-                submitpoints: 15,
+                submitpoints: 20,
                 instructorpoints: 20,
-                commentpoints: 8,
-                mincomments: 4,
+                commentpoints: 10,
+                mincomments: 6,  // 20 + 20 + (10 × 6) = 100
                 userealnames: false,
                 allowall: true,
                 resubmit: false
@@ -1537,8 +1537,8 @@ function initializeNavigation() {
             'scaffolded': {
                 submitpoints: 20,
                 instructorpoints: 30,
-                commentpoints: 5,
-                mincomments: 2,
+                commentpoints: 10,
+                mincomments: 5,  // 20 + 30 + (10 × 5) = 100
                 userealnames: true,
                 allowall: true,
                 resubmit: true
