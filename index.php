@@ -22,6 +22,8 @@ if ( SettingsForm::handleSettingsPost() ) {
     return;
 }
 
+$LAUNCH->link->settingsDefaultsFromCustom(array('instructions', 'submitpoints', 'instructorpoints', 'commentpoints', 'mincomments', 'userealnames', 'allowall', 'resubmit', 'auto_timeout'));
+
 // Grab the due date information
 $dueDate = SettingsForm::getDueDate();
 
