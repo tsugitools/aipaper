@@ -845,7 +845,7 @@ if ( U::strlen($inst_note) > 0 ) {
                     </label>
                     <input type="number" name="submitpoints" id="submitpoints" 
                            value="<?= htmlentities($current_submitpoints) ?>" 
-                           placeholder="<?= $needs_defaults ? '10' : '' ?>"
+                           placeholder=""
                            min="0" step="1" 
                            style="width: 100px; padding: 5px;">
                     <span class="help-text" id="help-submitpoints" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
@@ -860,7 +860,7 @@ if ( U::strlen($inst_note) > 0 ) {
                     </label>
                     <input type="number" name="instructorpoints" id="instructorpoints" 
                            value="<?= htmlentities($current_instructorpoints) ?>" 
-                           placeholder="<?= $needs_defaults ? '50' : '' ?>"
+                           placeholder=""
                            min="0" step="1" 
                            style="width: 100px; padding: 5px;">
                     <span class="help-text" id="help-instructorpoints" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
@@ -875,7 +875,7 @@ if ( U::strlen($inst_note) > 0 ) {
                     </label>
                     <input type="number" name="commentpoints" id="commentpoints" 
                            value="<?= htmlentities($current_commentpoints) ?>" 
-                           placeholder="<?= $needs_defaults ? '5' : '' ?>"
+                           placeholder=""
                            min="0" step="1" 
                            style="width: 100px; padding: 5px;">
                     <span class="help-text" id="help-commentpoints" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
@@ -890,7 +890,7 @@ if ( U::strlen($inst_note) > 0 ) {
                     </label>
                     <input type="number" name="mincomments" id="mincomments" 
                            value="<?= htmlentities($current_mincomments) ?>" 
-                           placeholder="<?= $needs_defaults ? '3' : '' ?>"
+                           placeholder=""
                            min="0" step="1" 
                            style="width: 100px; padding: 5px;">
                     <span class="help-text" id="help-mincomments" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
