@@ -49,12 +49,15 @@ function isAIConfigured() {
 function generateAIComment($instructions, $paper_text, $api_url = null) {
     global $CFG, $LAUNCH;
     
+    // Increase execution time for API calls (MAMP/web context may have shorter limits)
+    $max_execution_time = ini_get('max_execution_time');
+    if ( $max_execution_time > 0 && $max_execution_time < 60 ) {
+        set_time_limit(60);
+    }
+    
     // Get API URL from settings if not provided or if empty string passed
     if ( $api_url === null || $api_url === '' ) {
         $api_url = Settings::linkGet('ai_api_url', '');
-        error_log("AI Comment: API URL consulted from settings: '" . $api_url . "'");
-    } else {
-        error_log("AI Comment: API URL provided as parameter: '" . $api_url . "'");
     }
     
     // Get user info for logging
@@ -72,35 +75,69 @@ function generateAIComment($instructions, $paper_text, $api_url = null) {
     $api_key = Settings::linkGet('ai_api_key', '');
     $has_api_key = !empty($api_key);
     
-    // Check if this is an OpenAI endpoint
-    $is_openai = (strpos($api_url, 'api.openai.com') !== false || strpos($api_url, 'openai.com') !== false);
+    // Get organization if configured (for UMich API)
+    $api_organization = Settings::linkGet('ai_api_organization', '');
     
-    error_log("AI Comment: Starting API request - user_id: {$user_id}, email: {$user_email}, link_id: {$link_id}, api_url: '{$api_url}', has_api_key: " . ($has_api_key ? 'yes' : 'no') . ", is_openai: " . ($is_openai ? 'yes' : 'no'));
+    // Check if this is an OpenAI-compatible endpoint
+    $is_openai = (strpos($api_url, 'api.openai.com') !== false || strpos($api_url, 'openai.com') !== false);
+    // Check if this is a UMich API endpoint (check for specific UMich API domain)
+    $is_umich = (strpos($api_url, 'umgpt.umich.edu') !== false);
+    
+    $api_type = $is_umich ? 'UMich' : ($is_openai ? 'OpenAI' : 'Custom');
+    error_log("AI Comment: Accessing {$api_type} API - user_id: {$user_id}, api_url: '{$api_url}'");
     
     // Prepare the request payload based on API type
-    if ( $is_openai ) {
-        // OpenAI API format
+    if ( $is_openai || $is_umich ) {
+        // Build system prompt - strip HTML tags for cleaner content
         $system_prompt = "You are reviewing a student's paper submission. Provide constructive feedback in a brief paragraph (approximately 200 words or less). Focus on strengths, areas for improvement, and specific suggestions for revision. Be encouraging but honest, and reference specific parts of the paper when possible.";
         
         if ( !empty(trim($instructions)) ) {
-            $system_prompt .= "\n\nAssignment Instructions:\n" . $instructions;
+            // Strip HTML tags from instructions for cleaner API payload
+            $instructions_clean = strip_tags($instructions);
+            $instructions_clean = preg_replace('/\s+/', ' ', $instructions_clean); // Normalize whitespace
+            $instructions_clean = trim($instructions_clean);
+            if ( !empty($instructions_clean) ) {
+                $system_prompt .= "\n\nAssignment Instructions:\n" . $instructions_clean;
+            }
         }
         
-        $payload = array(
-            'model' => 'gpt-4.1-mini',
-            'messages' => array(
-                array(
-                    'role' => 'system',
-                    'content' => $system_prompt
+        // Clean paper text - strip HTML tags
+        $paper_text_clean = strip_tags($paper_text);
+        $paper_text_clean = trim($paper_text_clean);
+        
+        if ( $is_umich ) {
+            // UMich API format - match test-umich-api-web.php structure (no max_tokens/temperature)
+            // Extract deployment ID from UMich URL (e.g., /deployments/gpt-5-mini/)
+            $deployment_id = 'gpt-5-mini'; // default
+            if ( preg_match('/\/deployments\/([^\/]+)/', $api_url, $matches) ) {
+                $deployment_id = $matches[1];
+            }
+            
+            $payload = array(
+                "messages" => array(
+                    array("role" => "system", "content" => $system_prompt),
+                    array("role" => "user", "content" => "Please review the following paper:\n\n" . $paper_text_clean)
                 ),
-                array(
-                    'role' => 'user',
-                    'content' => "Please review the following paper:\n\n" . $paper_text
-                )
-            ),
-            'max_tokens' => 250,
-            'temperature' => 0.7
-        );
+                "model" => $deployment_id
+            );
+        } else {
+            // OpenAI API format
+            $payload = array(
+                'messages' => array(
+                    array(
+                        'role' => 'system',
+                        'content' => $system_prompt
+                    ),
+                    array(
+                        'role' => 'user',
+                        'content' => "Please review the following paper:\n\n" . $paper_text_clean
+                    )
+                ),
+                'max_tokens' => 250,
+                'temperature' => 0.7,
+                'model' => 'gpt-4.1-mini'
+            );
+        }
     } else {
         // Custom API format (original)
         $payload = array(
@@ -111,19 +148,42 @@ function generateAIComment($instructions, $paper_text, $api_url = null) {
     }
     
     // Prepare headers
-    $headers = array('Content-Type: application/json');
-    if ( !empty($api_key) ) {
-        $headers[] = 'Authorization: Bearer ' . $api_key;
+    $headers = array();
+    if ( $is_umich ) {
+        // UMich API headers - match bash script exactly
+        $headers[] = 'Content-Type: application/json';
+        if ( !empty($api_organization) ) {
+            $headers[] = 'OpenAI-Organization: ' . $api_organization;
+        }
+        if ( !empty($api_key) ) {
+            $headers[] = 'api-key: ' . $api_key;
+        }
+    } else {
+        // OpenAI and other APIs
+        $headers[] = 'Content-Type: application/json';
+        $headers[] = 'Accept: */*';
+        $headers[] = 'User-Agent: AIPaper-Tool/1.0';
+        if ( !empty($api_key) ) {
+            $headers[] = 'Authorization: Bearer ' . $api_key;
+        }
     }
     
-    // Make API call
+    // Encode JSON payload
+    $json_payload = json_encode($payload);
+    
+    // Make API call - match working test-umich-api.php exactly
+    // Add MAMP-specific workarounds if needed
     $ch = curl_init($api_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $json_payload);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // 30 second timeout
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     
+    error_log("AI Comment: Sending request to {$api_type} API");
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curl_error = curl_error($ch);
@@ -153,15 +213,16 @@ function generateAIComment($instructions, $paper_text, $api_url = null) {
     $response_data = json_decode($response, true);
     
     // Parse response based on API type
-    if ( $is_openai ) {
-        // OpenAI response format: choices[0].message.content
+    if ( $is_openai || $is_umich ) {
+        // OpenAI-compatible response format: choices[0].message.content
         if ( !$response_data || !isset($response_data['choices']) || !is_array($response_data['choices']) || empty($response_data['choices']) ) {
             $response_preview = substr($response, 0, 200);
-            $error_log_msg = "AI Comment: OpenAI API request failed - Invalid response format - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
+            $api_type = $is_umich ? 'UMich' : 'OpenAI';
+            $error_log_msg = "AI Comment: {$api_type} API request failed - Invalid response format - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
             error_log($error_log_msg);
             return array(
                 'success' => false, 
-                'error' => 'Invalid OpenAI API response format',
+                'error' => "Invalid {$api_type} API response format",
                 'error_log' => $error_log_msg
             );
         }
@@ -169,16 +230,18 @@ function generateAIComment($instructions, $paper_text, $api_url = null) {
         $comment = $response_data['choices'][0]['message']['content'] ?? '';
         if ( empty($comment) ) {
             $response_preview = substr($response, 0, 200);
-            $error_log_msg = "AI Comment: OpenAI API request failed - Empty comment in response - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
+            $api_type = $is_umich ? 'UMich' : 'OpenAI';
+            $error_log_msg = "AI Comment: {$api_type} API request failed - Empty comment in response - user_id: {$user_id}, api_url: '{$api_url}', response: {$response_preview}";
             error_log($error_log_msg);
             return array(
                 'success' => false, 
-                'error' => 'OpenAI API returned empty comment',
+                'error' => "{$api_type} API returned empty comment",
                 'error_log' => $error_log_msg
             );
         }
         
-        error_log("AI Comment: OpenAI API request successful - user_id: {$user_id}, api_url: '{$api_url}', comment_length: " . strlen($comment));
+        $comment_length = strlen($comment);
+        error_log("AI Comment: Received response from {$api_type} API - user_id: {$user_id}, comment_length: {$comment_length} characters");
         return array('success' => true, 'comment' => trim($comment));
     } else {
         // Custom API response format: comment field
@@ -193,7 +256,8 @@ function generateAIComment($instructions, $paper_text, $api_url = null) {
             );
         }
         
-        error_log("AI Comment: API request successful - user_id: {$user_id}, api_url: '{$api_url}', comment_length: " . strlen($response_data['comment']));
+        $comment_length = strlen($response_data['comment']);
+        error_log("AI Comment: Received response from Custom API - user_id: {$user_id}, comment_length: {$comment_length} characters");
         return array('success' => true, 'comment' => $response_data['comment']);
     }
 }
@@ -223,8 +287,6 @@ function generateAITestComment($instructions, $paper_text) {
     }
     
     $comment .= "In a production environment, this would be replaced with actual AI-generated feedback based on the rubric and your paper content.";
-    
-    error_log("AI Comment: Test comment generated - user_id: {$user_id}, email: {$user_email}, word_count: {$word_count}");
     
     return array('success' => true, 'comment' => $comment);
 }

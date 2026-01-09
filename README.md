@@ -20,7 +20,7 @@ This tool is designed to collect and grade short papers that were written with t
   - Peer review points (students earn points by commenting on other students' submissions)
   - Configurable point allocation
 
-- **AI Integration**: Optional AI API integration that can automatically generate comments when a student submits their paper
+- **AI Integration**: Optional AI API integration that can automatically generate comments when a student submits their paper. Supports both OpenAI and UMich Azure OpenAI APIs.
 
 - **Resubmission**: Optional ability for students to reset and resubmit their papers (configurable by instructor)
 
@@ -35,6 +35,26 @@ This tool is designed to collect and grade short papers that were written with t
 - Peer review visibility (all students or limited number)
 - Resubmission enabled/disabled
 - AI API integration settings
+
+## AI API Configuration
+
+The tool supports two AI API providers:
+
+### OpenAI API
+- **Endpoint URL**: `https://api.openai.com/v1/chat/completions`
+- **API Key**: Your OpenAI API key (Bearer token)
+- **Organization**: Not required
+
+### UMich Azure OpenAI API
+- **Endpoint URL**: `https://api.umgpt.umich.edu/azure-openai-api/openai/deployments/gpt-5-mini/chat/completions?api-version=2025-01-01-preview`
+  - Replace `gpt-5-mini` with your deployment ID if different
+  - Update `api-version` if using a different version
+- **API Key**: Your UMich API subscription key (`api-key` header)
+- **Organization**: Your organization ID (required, used in `OpenAI-Organization` header)
+
+### Testing Your API Connection
+
+Instructors can test their API configuration using the "Test UMich API Connection" link in the Settings section, or by accessing `test-umich-api-web.php` directly.
 
 ## Technical Details
 

@@ -342,6 +342,7 @@ $current_allowall = Settings::linkGet('allowall', false);
 $current_resubmit = Settings::linkGet('resubmit', false);
 $current_ai_api_url = Settings::linkGet('ai_api_url', '');
 $current_ai_api_key = Settings::linkGet('ai_api_key', '');
+$current_ai_api_organization = Settings::linkGet('ai_api_organization', '');
 $current_auto_timeout = Settings::linkGet('auto_instructor_grade_timeout', '');
 // Convert seconds to days and hours for display
 $auto_timeout_days = 0;
@@ -559,6 +560,7 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
         Settings::linkSet('resubmit', U::get($_POST, 'resubmit', false) ? true : false);
         Settings::linkSet('ai_api_url', U::get($_POST, 'ai_api_url', ''));
         Settings::linkSet('ai_api_key', U::get($_POST, 'ai_api_key', ''));
+        Settings::linkSet('ai_api_organization', U::get($_POST, 'ai_api_organization', ''));
         Settings::linkSet('auto_instructor_grade_timeout', U::get($_POST, 'auto_instructor_grade_timeout', ''));
         
         // Save due date
@@ -984,10 +986,10 @@ if ( U::strlen($inst_note) > 0 ) {
                     </label>
                     <input type="text" name="ai_api_url" id="ai_api_url" 
                            value="<?= htmlentities($current_ai_api_url) ?>" 
-                           placeholder="https://api.openai.com/v1/chat/completions"
+                           placeholder="https://api.umgpt.umich.edu/azure-openai-api/openai/deployments/gpt4/chat/completions?api-version=2024-03-01-preview"
                            style="width: 400px; padding: 5px;">
                     <span class="help-text" id="help-ai_api_url" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
-                        Endpoint URL for generating AI comments. Leave empty to use test endpoint. For OpenAI, use: https://api.openai.com/v1/chat/completions
+                        Endpoint URL for generating AI comments. Leave empty to use test endpoint. For UMich API, use: https://api.umgpt.umich.edu/azure-openai-api/openai/deployments/gpt4/chat/completions?api-version=2024-03-01-preview. For OpenAI, use: https://api.openai.com/v1/chat/completions
                     </span>
                 </div>
                 
@@ -1001,7 +1003,21 @@ if ( U::strlen($inst_note) > 0 ) {
                            placeholder="Your API key"
                            style="width: 300px; padding: 5px;">
                     <span class="help-text" id="help-ai_api_key" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
-                        Authentication key for the AI API. Required if using an external AI service like OpenAI.
+                        Authentication key for the AI API. Required if using an external AI service. For UMich API, this is your api-key. For OpenAI, this is your API key.
+                    </span>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="ai_api_organization" style="font-weight: bold; display: inline-block; min-width: 200px;">
+                        AI API Organization (optional)
+                        <span class="info-icon" data-help="ai_api_organization" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
+                    </label>
+                    <input type="text" name="ai_api_organization" id="ai_api_organization" 
+                           value="<?= htmlentities($current_ai_api_organization) ?>" 
+                           placeholder="Your organization ID"
+                           style="width: 300px; padding: 5px;">
+                    <span class="help-text" id="help-ai_api_organization" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em;">
+                        Organization identifier for the AI API. Required for UMich API (OpenAI-Organization header). Leave empty for OpenAI.
                     </span>
                 </div>
                 
