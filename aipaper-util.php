@@ -120,7 +120,7 @@ function call_llm($provider, $prompt, $api_key) {
  */
 function notifyCommentAdded($paper_owner_user_id, $comment_type, $assignment_title = null, $url = null)
 {
-    global $LAUNCH;
+    global $LAUNCH, $LINK;
     
     // Check if NotificationsService class exists before using it
     // class_exists() will trigger Composer autoloader if available
@@ -139,6 +139,7 @@ function notifyCommentAdded($paper_owner_user_id, $comment_type, $assignment_tit
     try {
         // Determine who added the comment
         $commenter_name = 'Someone';
+        $title = ''; // Initialize title
         if ($comment_type == 'AI') {
             $commenter_name = 'AI';
             $title = 'AI feedback added to your paper';
@@ -156,9 +157,13 @@ function notifyCommentAdded($paper_owner_user_id, $comment_type, $assignment_tit
         
         $text = "{$commenter_name} has added a comment to your paper.";
         
-        $result = \Tsugi\Util\NotificationsService::create($paper_owner_user_id, $title, $text, $url);
+        // Generate dedupe_key based on paper/assignment and comment type
+        $link_id = (isset($LINK) && is_object($LINK) && isset($LINK->id)) ? $LINK->id : 'unknown';
+        $dedupe_key = \Tsugi\Util\NotificationsService::generateDedupeKey('aipaper-comment', $paper_owner_user_id, $link_id, $comment_type);
+        
+        $result = \Tsugi\Util\NotificationsService::create($paper_owner_user_id, $title, $text, $url, null, $dedupe_key);
         if ($result !== false) {
-            error_log("Aipaper notification sent successfully (paper_owner_user_id=$paper_owner_user_id, comment_type=$comment_type, title=" . ($assignment_title ?? 'default') . ", url=" . ($url ?? 'null') . ")");
+            error_log("Aipaper notification sent successfully (paper_owner_user_id=$paper_owner_user_id, comment_type=$comment_type, title=" . ($assignment_title ?? 'default') . ", url=" . ($url ?? 'null') . ", dedupe_key=$dedupe_key)");
             return true;
         } else {
             error_log("Aipaper notification failed: NotificationsService::create returned false (paper_owner_user_id=$paper_owner_user_id, comment_type=$comment_type, url=" . ($url ?? 'null') . ")");
