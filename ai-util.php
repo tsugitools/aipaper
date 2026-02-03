@@ -3,7 +3,7 @@
  * Utility functions for AI comment generation
  */
 
- use \Tsugi\Util\U;
+use \Tsugi\Util\U;
 use \Tsugi\Core\Settings;
 
 /**

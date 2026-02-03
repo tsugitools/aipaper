@@ -1,6 +1,7 @@
 <?php
 require_once "../config.php";
 require_once "points-util.php";
+require_once "aipaper-util.php";
 
 use \Tsugi\Util\U;
 use \Tsugi\Util\FakeName;
@@ -308,6 +309,19 @@ if ( count($_POST) > 0 && isset($_POST['submit_comment']) ) {
             ':TYPE' => $comment_type
         )
     );
+    
+    // Send notification to the paper owner about the new comment
+    $paper_owner_user_id = $review_result['user_id'];
+    $notification_url = null;
+    if ( is_object($LAUNCH) && method_exists($LAUNCH, 'returnUrl') ) {
+        $notification_url = $LAUNCH->returnUrl();
+    }
+    if ( empty($notification_url) ) {
+        $notification_url = addSession('index');
+    }
+    // Get assignment title from link title
+    $assignment_title = $LINK->title ?? null;
+    notifyCommentAdded($paper_owner_user_id, $comment_type, $assignment_title, $notification_url);
     
     // Recalculate and send grade to LTI if student made comment
     if ( !$USER->instructor ) {
