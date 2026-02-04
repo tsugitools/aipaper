@@ -2,6 +2,7 @@
 require_once "../config.php";
 require_once "points-util.php";
 require_once "ai-util.php";
+require_once "aipaper-util.php";
 
 use \Tsugi\Util\U;
 use \Tsugi\Util\FakeName;
@@ -651,6 +652,19 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
                 $user_id = $LAUNCH->user->id ?? 'unknown';
                 $user_email = $LAUNCH->user->email ?? 'unknown';
                 error_log("AI Comment: Comment successfully added to database - result_id: {$result_id}, user_id: {$user_id}, email: {$user_email}, comment_length: " . strlen($ai_result['comment']));
+                
+                // Send notification to the paper owner about the AI comment
+                $paper_owner_user_id = $USER->id; // The current user owns this paper
+                $notification_url = null;
+                if ( is_object($LAUNCH) && method_exists($LAUNCH, 'returnUrl') ) {
+                    $notification_url = $LAUNCH->returnUrl();
+                }
+                if ( empty($notification_url) ) {
+                    $notification_url = addSession('index');
+                }
+                // Get assignment title from link title
+                $assignment_title = $LINK->title ?? null;
+                notifyCommentAdded($paper_owner_user_id, 'AI', $assignment_title, $notification_url);
             } else {
                 // Log error to server logs
                 $user_id = $LAUNCH->user->id ?? 'unknown';
