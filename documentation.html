@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MiniPaper Tool - Documentation</title>
+    <title>AI MiniPaper Tool - Documentation</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
     <style>
         body {
@@ -111,17 +111,32 @@
         h4[id], h5[id] {
             scroll-margin-top: 80px;
         }
+        .skip-link {
+            position: absolute;
+            left: -9999px;
+            z-index: 999;
+            padding: 1rem 1.5rem;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 0 0 4px 0;
+        }
+        .skip-link:focus {
+            left: 0;
+            top: 0;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <main id="main-content" class="container">
         <h2>AI MiniPaper Tool - Instructor Guide</h2>
         
         <p>The AI MiniPaper Tool is designed to collect and grade short papers written with AI assistance. Students submit papers using CKEditor 5.0, with feedback provided through comment streams. The tool supports instructor grading, peer review comments, flagging for moderation, and comprehensive student analytics.</p>
 
         <!-- Quick Start Section -->
         <div class="quick-start">
-            <h3>🚀 Quick Start</h3>
+            <h3><span aria-hidden="true">🚀</span> Quick Start</h3>
             <p><strong>New to the tool? Follow these steps:</strong></p>
             <ol>
                 <li><strong>Enter Instructions:</strong> Click the "Instructions" tab and write your assignment instructions</li>
@@ -139,7 +154,7 @@
 
         <!-- Table of Contents -->
         <div class="toc">
-            <h3>📑 Table of Contents</h3>
+            <h3><span aria-hidden="true">📑</span> Table of Contents</h3>
             <ul>
                 <li><a href="#settings">Settings Configuration</a></li>
                 <li><a href="#instructions">Instructions / Rubric</a></li>
@@ -269,6 +284,6 @@
 <h4 id="test-data">Test Data</h4>
 <p>If your LTI key is '12345', you can access a test data generator from the Instructor menu to create 100 dummy users with submitted papers for testing the review system.</p>
 
-    </div>
+    </main>
 </body>
 </html>

@@ -695,11 +695,11 @@ if ( count($_POST) > 0 && (isset($_POST['submit_paper']) || isset($_POST['save_p
 $menu = new \Tsugi\UI\MenuSet();
 
 if ( $LAUNCH->user->instructor ) {
-    $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" style="cursor: pointer;"');
-    $menu->addLeft(__('Settings'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="settings" style="cursor: pointer;"');
+    $menu->addLeft(__('Instructions'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="instructions" role="tab" aria-controls="section-instructions" style="cursor: pointer;"');
+    $menu->addLeft(__('Settings'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="settings" role="tab" aria-controls="section-settings" style="cursor: pointer;"');
     // Only show AI Prompt if AI is configured
     if ( isAIConfigured() ) {
-        $menu->addLeft(__('AI Prompt'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_prompt" style="cursor: pointer;"');
+        $menu->addLeft(__('AI Prompt'), '#', /* push */ false, 'class="tsugi-nav-link" data-section="ai_prompt" role="tab" aria-controls="section-ai_prompt" style="cursor: pointer;"');
     }
     $submenu = new \Tsugi\UI\Menu();
     $submenu->addLink(__('Student Data'), 'grades');
@@ -712,7 +712,7 @@ if ( $LAUNCH->user->instructor ) {
         $submenu->addLink(__('Generate Test Data'), 'testdata.php');
     }
     $menu->addRight(__('Save'), '#', /* push */ false, 'id="menu-save-instructor-btn" style="cursor: pointer; font-weight: bold;"');
-    $menu->addRight(__('Documentation'), 'documentation.html', /* push */ false, 'target="_blank"');
+    $menu->addRight(__('Documentation'), 'documentation.html', /* push */ false, 'target="_blank" rel="noopener noreferrer" aria-label="'.htmlspecialchars(__('Open documentation in new tab'), ENT_QUOTES, 'UTF-8').'"');
     $menu->addRight(__('Instructor'), $submenu, /* push */ false);
 } else {
     // Add navigation items to menu
@@ -816,17 +816,18 @@ if ( U::strlen($inst_note) > 0 ) {
         </div>
         
         <!-- Instructions section -->
-        <div class="student-section active" id="section-instructions">
-            <h3 style="margin-top: 0;">Step 1: Assignment Instructions</h3>
+        <div class="student-section active" id="section-instructions" role="tabpanel" aria-labelledby="heading-instructions">
+            <h3 id="heading-instructions" style="margin-top: 0;">Step 1: Assignment Instructions</h3>
             <p>Please enter the instructions for the assignment here. This will be used to generate feedback for the students.</p>
+            <label for="editor_instructions" class="sr-only">Assignment instructions</label>
             <div class="ckeditor-container">
-                <textarea name="instructions" id="editor_instructions"><?= htmlentities($instructions ?? '') ?></textarea>
+                <textarea name="instructions" id="editor_instructions" aria-label="Assignment instructions"><?= htmlentities($instructions ?? '') ?></textarea>
             </div>
         </div>
         
         <!-- Settings section -->
-        <div class="student-section" id="section-settings" style="margin-top: 30px;">
-            <h3 style="margin-top: 0;">Step 2: Assignment Settings</h3>
+        <div class="student-section" id="section-settings" role="tabpanel" aria-labelledby="heading-settings" style="margin-top: 30px;">
+            <h3 id="heading-settings" style="margin-top: 0;">Step 2: Assignment Settings</h3>
             <p>Configure how points are awarded and other assignment options. You can use the preset options below or customize manually.</p>
             
             <!-- Assignment Type Preset Dropdown -->
@@ -966,7 +967,7 @@ if ( U::strlen($inst_note) > 0 ) {
                 </div>
                 
                 <div style="margin-bottom: 15px;">
-                    <label style="font-weight: bold; display: inline-block; min-width: 200px;">
+                    <label for="auto_timeout_days" style="font-weight: bold; display: inline-block; min-width: 200px;">
                         Auto Grade Timeout
                         <span class="info-icon" data-help="auto_timeout" style="cursor: help; color: #337ab7; margin-left: 5px;">ℹ️</span>
                     </label>
@@ -987,7 +988,7 @@ if ( U::strlen($inst_note) > 0 ) {
                         <span id="auto_timeout_display" style="margin-left: 10px; color: #666; font-size: 0.9em;"></span>
                     </div>
                     <span class="help-text" id="help-auto_timeout" style="display: none; margin-left: 10px; color: #666; font-size: 0.9em; clear: both; display: block; margin-top: 5px;">
-                        Automatically send grade of 100% after this time since submission. Ensures students get credit even if they can't complete reviews or if the instructor does not do their grading. Typically left at 0 days and 0 hours exept for courses with little regular instructor supervision.
+                        Automatically send grade of 100% after this time since submission. Ensures students get credit even if they can't complete reviews or if the instructor does not do their grading. Typically left at 0 days and 0 hours except for courses with little regular instructor supervision.
                     </span>
                 </div>
                 
@@ -1050,8 +1051,8 @@ if ( U::strlen($inst_note) > 0 ) {
         
         <!-- AI Prompt section (only shown if AI is configured) -->
         <?php if ( isAIConfigured() ) { ?>
-        <div class="student-section" id="section-ai_prompt">
-            <h3 style="margin-top: 0;">AI Prompt Configuration (Optional)</h3>
+        <div class="student-section" id="section-ai_prompt" role="tabpanel" aria-labelledby="heading-ai_prompt">
+            <h3 id="heading-ai_prompt" style="margin-top: 0;">AI Prompt Configuration (Optional)</h3>
             <?php 
             // Get or create default AI prompt (use HTML formatting for CKEditor)
             if ( empty($ai_prompt) ) {
@@ -1060,8 +1061,9 @@ if ( U::strlen($inst_note) > 0 ) {
             }
             ?>
             <p><em>This prompt is sent to the AI service when generating feedback comments. The text shown below is the default prompt. Feel free to improve it. Use <strong>-- Instructions Included Here --</strong> as a placeholder where you want the assignment instructions to be inserted automatically.</em></p>
+            <label for="editor_ai_prompt" class="sr-only">AI prompt for generating feedback</label>
             <div class="ckeditor-container">
-                <textarea name="ai_prompt" id="editor_ai_prompt"><?= htmlentities($ai_prompt) ?></textarea>
+                <textarea name="ai_prompt" id="editor_ai_prompt" aria-label="AI prompt for generating feedback"><?= htmlentities($ai_prompt) ?></textarea>
             </div>
         </div>
         <?php } ?>
@@ -1856,11 +1858,11 @@ function initializeNavigation() {
             }
             
             // Remove active class from all navigation links and sections
-            $('.tsugi-nav-link').removeClass('active');
+            $('.tsugi-nav-link').removeClass('active').attr('aria-selected', 'false');
             $('.student-section').removeClass('active');
             
             // Add active class to clicked link and corresponding section
-            $(this).addClass('active');
+            $(this).addClass('active').attr('aria-selected', 'true');
             var targetSection = $('#section-' + section);
             
             if ( targetSection.length === 0 ) {
@@ -1896,25 +1898,29 @@ function initializeNavigation() {
             <?php } ?>
         });
         
+        // Set up tablist and aria-selected for accessibility
+        $('.tsugi-nav-link').closest('ul').attr('role', 'tablist');
+        $('.tsugi-nav-link').attr('aria-selected', 'false');
+        
         // Set default active section
         <?php if ( $USER->instructor ) { ?>
             // Instructor: Set Instructions as active by default
-            $('.tsugi-nav-link[data-section="instructions"]').addClass('active');
+            $('.tsugi-nav-link[data-section="instructions"]').addClass('active').attr('aria-selected', 'true');
         <?php } else { ?>
             // Student: Set default active section
             <?php if ( isset($_GET['review_page']) ) { ?>
                 // Auto-navigate to Review section if review_page parameter is present
-                $('.tsugi-nav-link').removeClass('active');
+                $('.tsugi-nav-link').removeClass('active').attr('aria-selected', 'false');
                 $('.student-section').removeClass('active');
-                $('.tsugi-nav-link[data-section="review"]').addClass('active');
+                $('.tsugi-nav-link[data-section="review"]').addClass('active').attr('aria-selected', 'true');
                 $('#section-review').addClass('active');
             <?php } else if ( !$is_submitted ) { ?>
                 // When paper is not submitted, default to Paper tab
-                $('.tsugi-nav-link[data-section="submission"]').addClass('active');
+                $('.tsugi-nav-link[data-section="submission"]').addClass('active').attr('aria-selected', 'true');
                 $('#section-submission').addClass('active');
             <?php } else { ?>
                 // When paper is submitted, default to Main tab
-                $('.tsugi-nav-link[data-section="main"]').addClass('active');
+                $('.tsugi-nav-link[data-section="main"]').addClass('active').attr('aria-selected', 'true');
             <?php } ?>
         <?php } ?>
         
